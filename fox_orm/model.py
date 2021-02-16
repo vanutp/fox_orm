@@ -24,7 +24,7 @@ class OrmModelMeta(ModelMetaclass):
     __sqla_table__: Table
 
     def _ensure_proper_init(cls):
-        if getattr(cls, '__sqla_table__', None) is None:
+        if not hasattr(cls, '__sqla_table__'):
             raise OrmException('__sqla_table__ must be set')
         if not isinstance(cls.__sqla_table__, Table):
             raise OrmException('__sqla_table__ type should be sqlalchemy.Table')
