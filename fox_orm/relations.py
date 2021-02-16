@@ -1,5 +1,5 @@
 import asyncio
-from typing import Union, Type, TypeVar, Generic, Iterator
+from typing import Union, Type, TypeVar, Generic, Iterator, Optional, List
 
 from sqlalchemy import and_, select, Table, exists
 
@@ -13,7 +13,7 @@ MODEL = TypeVar('MODEL', bound='OrmModel')
 class IdsList(list):
     ids: set
 
-    def __init__(self, items=None):
+    def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
         self.ids = set()
         if items is not None:
             super().__init__(items)
@@ -22,13 +22,13 @@ class IdsList(list):
         else:
             super().__init__()
 
-    def add(self, other):
+    def add(self, other: MODEL):
         if other.id in self.ids:
             return
         self.append(other)
         self.ids.add(other.id)
 
-    def delete(self, other):
+    def delete(self, other: MODEL):
         if other.id not in self.ids:
             return
         for i, x in enumerate(self):
@@ -40,7 +40,9 @@ class IdsList(list):
         del self[to_delete]
         self.ids.remove(other.id)
 
-    def __contains__(self, item):
+    def __contains__(self, item: Union[MODEL, int]):  # pylint: disable=unsubscriptable-object
+        if isinstance(item, int):
+            return item in self.ids
         return item.id in self.ids
 
 
@@ -134,7 +136,7 @@ class ManyToMany(Generic[MODEL]):
         self.__modified__[other.id] = False
         return OptionalAwaitable(self.save)
 
-    def __contains__(self, item: MODEL) -> bool:
+    def __contains__(self, item: Union[MODEL, int]) -> bool:  # pylint: disable=unsubscriptable-object
         self._raise_if_not_fetched()
         return item in self._objects
 

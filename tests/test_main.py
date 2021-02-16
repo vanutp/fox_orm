@@ -78,6 +78,22 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await a_inst.b_objs.fetch()
         self.assertEqual(len(a_inst.b_objs), 10)
 
+    async def test_m2m_contains(self):
+        a_inst = A(text='test_m2m_contains', n=0)
+        await a_inst.save()
+        await a_inst.b_objs.fetch()
+
+        for i in range(10):
+            b_inst = B(text2='test_m2m_contains_' + str(i), n=0)
+            await b_inst.save()
+            a_inst.b_objs.add(b_inst)
+            a_inst.b_objs.add(b_inst)
+        last_id = a_inst.b_objs[-1].id
+        self.assertIn(last_id, a_inst.b_objs)
+        self.assertIn(a_inst.b_objs[-1], a_inst.b_objs)
+        b_inst = await B.select(and_(B.c.text2 == 'test_m2m_contains_0', B.c.n == 0))
+        self.assertIn(b_inst, a_inst.b_objs)
+
     async def test_m2m_delete(self):
         a_inst = A(text='test_m2m_delete', n=0)
         await a_inst.save()
