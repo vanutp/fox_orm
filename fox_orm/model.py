@@ -1,4 +1,4 @@
-from typing import Any, Union, Mapping, TYPE_CHECKING
+from typing import Any, Union, Mapping, TYPE_CHECKING, Dict
 
 from pydantic import BaseModel, PrivateAttr
 from pydantic.main import ModelMetaclass
@@ -41,11 +41,10 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     class Config:
         validate_assignment = True
 
+    __private_attributes__: Dict[str, Any]
     __sqla_table__: Table
-
     __modified__: set
     __bound__: bool
-
     __exclude__: set
 
     def __init__(self, **data: Any) -> None:
