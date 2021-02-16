@@ -2,7 +2,7 @@ from typing import Any, Union, Mapping, TYPE_CHECKING, Dict
 
 from pydantic import BaseModel, PrivateAttr
 from pydantic.main import ModelMetaclass
-from sqlalchemy import select, func, Table
+from sqlalchemy import select, func, Table, exists
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
@@ -135,6 +135,12 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             res.append(cls.parse_obj(x))
             res[-1].__bound__ = True
         return res
+
+    @classmethod
+    async def exists(cls, where):
+        query = cls._generate_query(where, None, None)
+        query = exists(query).select()
+        return await FoxOrm.db.fetch_val(query)
 
     @classmethod
     async def count(cls, where):

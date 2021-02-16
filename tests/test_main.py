@@ -142,6 +142,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(res), 0)
         res = await A.select(A.c.text == 'test_select_nonexistent')
         self.assertIsNone(res)
+        res = await A.exists(A.c.text == 'test_select_nonexistent')
+        self.assertEqual(res, False)
+
+    async def test_exists(self):
+        a_inst = A(text='test_exists', n=0)
+        await a_inst.save()
+        res = await A.exists(A.c.text == 'test_exists')
+        self.assertEqual(res, True)
 
     async def test_count(self):
         for i in range(10):
