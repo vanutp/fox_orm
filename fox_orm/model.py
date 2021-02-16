@@ -105,7 +105,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__bound__ = True
 
     @classmethod
-    def _generate_query(cls, where, order_by):
+    def _generate_query(cls, where, order_by, limit):
         query = cls.__sqla_table__.select()
         if where is not None:
             query = query.where(where)
@@ -114,11 +114,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
                 order_by = [order_by]
             for i in order_by:
                 query = query.order_by(i)
+        if limit is not None:
+            query = query.limit(limit)
         return query
 
     @classmethod
     async def select(cls, where, *, order_by=None):
-        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by))
+        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None))
         if not res:
             return None
         res = cls.parse_obj(res)
@@ -126,8 +128,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls, where, *, order_by=None):
-        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by))
+    async def select_all(cls, where, *, order_by=None, limit=None):
+        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit))
         res = []
         for x in q_res:
             res.append(cls.parse_obj(x))
