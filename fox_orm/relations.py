@@ -82,13 +82,16 @@ class ManyToMany(Generic[MODEL]):
         res._initialized = True  # pylint: disable=protected-access
         return res
 
+    async def fetch_ids(self):
+        return [x[self.other_id] for x in await FoxOrm.db.fetch_all(self.via.select().where(
+            getattr(self.via.c, self.this_id) == self.model.id
+        ))]
+
     async def fetch(self):
         self._raise_if_not_initialized()
         self.model.ensure_id()
-        ids = await FoxOrm.db.fetch_all(self.via.select().where(
-            getattr(self.via.c, self.this_id) == self.model.id
-        ))
-        self._objects = IdsList(await asyncio.gather(*[self.to.get(x[self.other_id]) for x in ids]))
+        ids = await self.fetch_ids()
+        self._objects = IdsList(await asyncio.gather(*[self.to.get(x) for x in ids]))
         self._fetched = True
 
     def _raise_if_not_initialized(self):
