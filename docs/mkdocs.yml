@@ -1,0 +1,26 @@
+site_name: Fox Orm
+theme:
+  name: material
+  features:
+    - navigation.instant
+plugins:
+- search
+markdown_extensions:
+- toc:
+    permalink: true
+- markdown_include.include:
+    base_path: docs
+- pymdownx.highlight
+- pymdownx.superfences
+nav:
+- Fox Orm: index.md
+- Getting Started:
+  - getting_started/installation.md
+  - getting_started/models.md
+  - getting_started/generating_tables.md
+  - getting_started/init_and_connect.md
+- Usage:
+  - usage/basic_operations.md
+  - Many to many:
+    - usage/many_to_many/definition.md
+    - usage/many_to_many/usage.md
