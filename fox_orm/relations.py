@@ -75,9 +75,9 @@ class ManyToMany(Generic[MODEL]):
         self._initialized = False
 
     def _init_copy(self, model: MODEL):
-        res = ManyToMany(to=self.to, via=self.via, this_id=self.this_id, other_id=self.other_id)
         if isinstance(self.to, str):
             self.to = full_import(self.to)
+        res = ManyToMany(to=self.to, via=self.via, this_id=self.this_id, other_id=self.other_id)
         res.model = model
         res._initialized = True  # pylint: disable=protected-access
         return res
