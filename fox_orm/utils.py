@@ -122,4 +122,12 @@ def validate_model(
         return values, fields_set, None
 
 
-__all__ = ['full_import', 'OptionalAwaitable']
+# noinspection PyMethodOverriding,PyArgumentList,PyUnresolvedReferences,PyPep8Naming
+# pylint: disable=invalid-name,no-member
+class class_or_instancemethod(classmethod):
+    def __get__(self, instance, type_):
+        descr_get = super().__get__ if instance is None else self.__func__.__get__
+        return descr_get(instance, type_)
+
+
+__all__ = ['full_import', 'OptionalAwaitable', 'validate_model', 'class_or_instancemethod']

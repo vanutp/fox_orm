@@ -143,13 +143,13 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         res = await A.select(A.c.text == 'test_select_nonexistent')
         self.assertIsNone(res)
         res = await A.exists(A.c.text == 'test_select_nonexistent')
-        self.assertEqual(res, False)
+        self.assertFalse(res)
 
     async def test_exists(self):
         a_inst = A(text='test_exists', n=0)
         await a_inst.save()
         res = await A.exists(A.c.text == 'test_exists')
-        self.assertEqual(res, True)
+        self.assertTrue(res)
 
     async def test_count(self):
         for i in range(10):
@@ -185,3 +185,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await A.delete(A.c.text == 'test_delete')
         objs = await A.select_all(A.c.text == 'test_delete')
         self.assertEqual(len(objs), 0)
+
+    async def test_delete_inst(self):
+        inst = A(text='test_delete_inst', n=0)
+        await inst.save()
+        await inst.delete()
+        res = await A.exists(A.c.text == 'test_delete_inst')
+        self.assertFalse(res)

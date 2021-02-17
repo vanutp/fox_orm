@@ -7,7 +7,7 @@ from sqlalchemy import select, func, Table, exists
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
 from fox_orm.relations import ManyToMany
-from fox_orm.utils import validate_model
+from fox_orm.utils import validate_model, class_or_instancemethod
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
@@ -77,7 +77,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
               include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
               exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None, exclude_unset: bool = False,
               exclude_defaults: bool = False, exclude_none: bool = False) -> 'TupleGenerator':
-        exclude_private = self.__exclude__ | EXCLUDE_KEYS
+        exclude_private = self.__exclude__ - {'id'} | EXCLUDE_KEYS
         if exclude is None:
             exclude = exclude_private
         elif isinstance(exclude, Mapping):  # pylint: disable=isinstance-second-argument-not-valid-type
@@ -130,7 +130,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__modified__ = set()
         else:
             table = self.__class__.__sqla_table__
-            data = self.dict()
+            data = self.dict(exclude={'id'})
             self.id = await FoxOrm.db.execute(table.insert(), data)  # pylint: disable=attribute-defined-outside-init
             self.__bound__ = True
 
@@ -177,9 +177,24 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return await FoxOrm.db.fetch_val(query)
 
     @classmethod
-    async def delete(cls, where):
+    async def _delete_cls(cls, where):
         query = cls.__sqla_table__.delete().where(where)
         return await FoxOrm.db.execute(query)
+
+    async def _delete_inst(self):
+        self.ensure_id()
+        table = self.__class__.__sqla_table__
+        query = table.delete().where(table.c.id == self.id)
+        self.__bound__ = False
+        return await FoxOrm.db.execute(query)
+
+    # pylint: disable=bad-classmethod-argument,no-else-return
+    @class_or_instancemethod
+    async def delete(self_or_cls, *args, **kwargs):
+        if isinstance(self_or_cls, type):
+            return await self_or_cls._delete_cls(*args, **kwargs)
+        else:
+            return await self_or_cls._delete_inst(*args, **kwargs)
 
     @classmethod
     async def count(cls, where):
