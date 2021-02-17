@@ -189,8 +189,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return await FoxOrm.db.fetch_val(query)
 
     @classmethod
-    async def get(cls, obj_id: int):
-        return await cls.select(cls.__sqla_table__.c.id == obj_id)
+    async def get(cls, obj_id: int, skip_parsing=False):
+        return await cls.select(cls.__sqla_table__.c.id == obj_id, skip_parsing=skip_parsing)
 
     async def _fetch_related(self, field: str):
         self.ensure_id()
