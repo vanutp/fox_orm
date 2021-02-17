@@ -28,16 +28,6 @@ user.last_name = 'Last name'
 await user.save()
 ```
 
-## Get
-
-`Model.get(obj_id)` is a shorthand for `Model.select(Model.c.id == obj_id)`
-
-For example:
-
-```python
-user = await User.get(1)
-```
-
 ### Mutable fields
 
 Due to python limitations, you need to call `instance.flag_modified('field_name')`
@@ -47,6 +37,16 @@ after modifying fields, which values are mutable objects in Python (for example 
 user.data['additional_field'] = 'value'
 user.flag_modified('data')
 await user.save()
+```
+
+## Get
+
+`Model.get(obj_id)` is a shorthand for `Model.select(Model.c.id == obj_id)`
+
+For example:
+
+```python
+user = await User.get(1)
 ```
 
 This is not necessary if you set the whole field, like this:
