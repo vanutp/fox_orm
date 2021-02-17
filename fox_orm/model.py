@@ -105,7 +105,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__bound__ = True
 
     @classmethod
-    def _generate_query(cls, where, order_by, limit):
+    def _generate_query(cls, where, order_by, limit, offset):
         query = cls.__sqla_table__.select()
         if where is not None:
             query = query.where(where)
@@ -116,11 +116,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
                 query = query.order_by(i)
         if limit is not None:
             query = query.limit(limit)
+        if offset is not None:
+            query = query.offset(offset)
         return query
 
     @classmethod
     async def select(cls, where, *, order_by=None):
-        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None))
+        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None))
         if not res:
             return None
         res = cls.parse_obj(res)
@@ -128,8 +130,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls, where, *, order_by=None, limit=None):
-        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit))
+    async def select_all(cls, where, *, order_by=None, limit=None, offset=None):
+        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset))
         res = []
         for x in q_res:
             res.append(cls.parse_obj(x))
@@ -138,7 +140,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     async def exists(cls, where):
-        query = cls._generate_query(where, None, None)
+        query = cls._generate_query(where, None, None, None)
         query = exists(query).select()
         return await FoxOrm.db.fetch_val(query)
 
