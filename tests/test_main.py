@@ -177,3 +177,11 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OrmException):
             class Model(OrmModel):
                 id: Optional[int]
+
+    async def test_delete(self):
+        for i in range(10):
+            inst = A(text='test_delete', n=i)
+            await inst.save()
+        await A.delete(A.c.text == 'test_delete')
+        objs = await A.select_all(A.c.text == 'test_delete')
+        self.assertEqual(len(objs), 0)

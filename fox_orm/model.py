@@ -143,6 +143,11 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return await FoxOrm.db.fetch_val(query)
 
     @classmethod
+    async def delete(cls, where):
+        query = cls.__sqla_table__.delete().where(where)
+        return await FoxOrm.db.execute(query)
+
+    @classmethod
     async def count(cls, where):
         query = select([func.count()]).select_from(cls.__sqla_table__)
         if where is not None:
