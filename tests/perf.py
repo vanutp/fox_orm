@@ -15,7 +15,7 @@ if os.path.exists(DB_FILE):
 FoxOrm.init(DB_URI)
 metadata.create_all(create_engine(DB_URI))
 
-ITERATIONS = 1000
+ITERATIONS = 100
 
 
 async def main():
@@ -23,15 +23,27 @@ async def main():
     time_start = time()
     for i in range(ITERATIONS):
         await FoxOrm.db.execute(a.insert(), {
-            'text': str(i),
+            'text': 'test',
             'n': i,
         })
     print('- Databases', (time() - time_start) / ITERATIONS)
 
     time_start = time()
     for i in range(ITERATIONS):
-        a_obj = A(text=str(i), n=i)
+        a_obj = A(text='test2', n=i)
         await a_obj.save()
+    print('- FoxOrm', (time() - time_start) / ITERATIONS)
+
+    print('Select all')
+
+    time_start = time()
+    for i in range(ITERATIONS):
+        data = await FoxOrm.db.fetch_all(a.select().where(a.c.text == 'test'))
+    print('- Databases', (time() - time_start) / ITERATIONS)
+
+    time_start = time()
+    for i in range(ITERATIONS):
+        data = await A.select_all(A.c.text == 'test2')
     print('- FoxOrm', (time() - time_start) / ITERATIONS)
 
 

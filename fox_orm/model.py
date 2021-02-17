@@ -1,6 +1,6 @@
-from typing import Any, Union, Mapping, TYPE_CHECKING, Dict
+from typing import Union, Mapping, TYPE_CHECKING
 
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
 from sqlalchemy import select, func, Table, exists
 
@@ -10,14 +10,9 @@ from fox_orm.relations import ManyToMany
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
-    from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator
+    from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
 
-PRIVATE_ATTRS = {
-    '__modified__': set(),
-    '__bound__': False,
-    '__exclude__': set()
-}
-EXCLUDE_KEYS = set(PRIVATE_ATTRS.keys())
+EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__'}
 
 
 class OrmModelMeta(ModelMetaclass):
@@ -34,28 +29,38 @@ class OrmModelMeta(ModelMetaclass):
             return
         cls._ensure_proper_init()  # pylint: disable=no-value-for-parameter
         cls.c = cls.__sqla_table__.c
+
+        cls.__exclude__ = EXCLUDE_KEYS.copy()
+
         super().__init__(name, bases, namespace)
+        for i in cls.__fields__:
+            if isinstance(cls.__fields__[i].default, ManyToMany):
+                cls.__exclude__.add(i)
+        cls.__exclude__.add('id')
 
 
 class OrmModel(BaseModel, metaclass=OrmModelMeta):
     class Config:
         validate_assignment = True
 
-    __private_attributes__: Dict[str, Any]
+    # cls attrs
     __sqla_table__: Table
-    __modified__: set
-    __bound__: bool
     __exclude__: set
 
-    def __init__(self, **data: Any) -> None:
-        for k, v in PRIVATE_ATTRS.items():
-            self.__private_attributes__[k] = PrivateAttr(default=v)
-        super().__init__(**data)
+    # instance attrs
+    __modified__: set
+    __bound__: bool
+
+    def __repr_args__(self) -> 'ReprArgs':
+        return [(k, v) for k, v in self.__dict__.items() if k not in self.__exclude__]
+
+    def _init_private_attributes(self):
+        self.__modified__ = set()
+        self.__bound__ = False
         for i in self.__fields__:
             if isinstance(self.__fields__[i].default, ManyToMany):
-                self.__exclude__.add(i)
-                self.__dict__[i] = self.__fields__[i].default._init_copy(self)
-        self.__exclude__.add('id')
+                self.__dict__[i] = self.__fields__[i].default._init_copy(self)  # pylint: disable=protected-access
+        super()._init_private_attributes()
 
     # pylint: disable=unsubscriptable-object, too-many-arguments
     def _iter(self, to_dict: bool = False, by_alias: bool = False,
@@ -72,15 +77,34 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             exclude |= exclude_private
         return super()._iter(to_dict, by_alias, include, exclude, exclude_unset, exclude_defaults, exclude_none)
 
-    def flag_modified(self, attr):
-        self.__modified__.add(attr)
-
     def __setattr__(self, name, value):
-        if name == 'id' and self.__bound__:
-            raise OrmException('Can not modify id')
-        if name not in self.__private_attributes__ and name not in self.__exclude__:
+        if name == 'id':
+            if self.__bound__:
+                raise OrmException('Can not modify id')
+            return super().__setattr__(name, value)
+        if name in EXCLUDE_KEYS:
+            return object.__setattr__(self, name, value)
+        if name not in self.__private_attributes__:
             self.flag_modified(name)
         return super().__setattr__(name, value)
+
+    @classmethod
+    def parse_obj(cls, *args, **kwargs):
+        raise OrmException('Do not use parse_obj with OrmModel')
+
+    @classmethod
+    def construct(cls, values):
+        m = cls.__new__(cls)
+        fields_values = {name: field.get_default() for name, field in cls.__fields__.items() if
+                         not field.required and field.name not in cls.__exclude__}
+        fields_values.update(values)
+        object.__setattr__(m, '__dict__', fields_values)
+        object.__setattr__(m, '__fields_set__', set(values.keys()))
+        m._init_private_attributes()  # pylint: disable=protected-access
+        return m
+
+    def flag_modified(self, attr):
+        self.__modified__.add(attr)
 
     def ensure_id(self):
         if not self.__bound__:
@@ -125,7 +149,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None))
         if not res:
             return None
-        res = cls.parse_obj(res)
+        res = cls.construct(res)
         res.__bound__ = True
         return res
 
@@ -134,7 +158,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset))
         res = []
         for x in q_res:
-            res.append(cls.parse_obj(x))
+            res.append(cls.construct(dict(x)))
             res[-1].__bound__ = True
         return res
 
