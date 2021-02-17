@@ -15,6 +15,12 @@ class _FoxOrmMeta(type):
     def db(cls):
         return cls._db
 
+    async def connect(cls):
+        await cls.db.connect()
+
+    async def disconnect(cls):
+        await cls.db.disconnect()
+
 
 class FoxOrm(metaclass=_FoxOrmMeta):
     db: Database
