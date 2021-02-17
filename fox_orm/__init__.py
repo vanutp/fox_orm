@@ -16,10 +16,10 @@ class _FoxOrmMeta(type):
         return cls._db
 
     async def connect(cls):
-        await cls.db.connect()
+        await cls.db.connect()  # pylint: disable=no-member
 
     async def disconnect(cls):
-        await cls.db.disconnect()
+        await cls.db.disconnect()  # pylint: disable=no-member
 
 
 class FoxOrm(metaclass=_FoxOrmMeta):

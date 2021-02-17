@@ -1,4 +1,4 @@
-from typing import Union, Mapping, TYPE_CHECKING
+from typing import Union, Mapping, TYPE_CHECKING, Dict, Any
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
@@ -44,6 +44,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         validate_assignment = True
 
     # cls attrs
+    __private_attributes__: Dict[str, Any]
     __sqla_table__: Table
     __exclude__: set
 
@@ -93,7 +94,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         raise OrmException('Do not use parse_obj with OrmModel')
 
     @classmethod
-    def construct(cls, values):
+    def construct(cls, values):  # pylint: disable=arguments-differ
         m = cls.__new__(cls)
         fields_values = {name: field.get_default() for name, field in cls.__fields__.items() if
                          not field.required and field.name not in cls.__exclude__}
