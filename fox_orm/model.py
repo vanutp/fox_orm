@@ -7,6 +7,7 @@ from sqlalchemy import select, func, Table, exists
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
 from fox_orm.relations import ManyToMany
+from fox_orm.utils import validate_model
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
@@ -63,6 +64,14 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
                 self.__dict__[i] = self.__fields__[i].default._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
 
+    def __init__(self, **data: Any) -> None:  # pylint: disable=super-init-not-called
+        values, fields_set, validation_error = validate_model(self.__class__, data)
+        if validation_error:
+            raise validation_error  # pylint: disable=raising-bad-type
+        object.__setattr__(self, '__dict__', values)
+        object.__setattr__(self, '__fields_set__', fields_set)
+        self._init_private_attributes()
+
     # pylint: disable=unsubscriptable-object, too-many-arguments
     def _iter(self, to_dict: bool = False, by_alias: bool = False,
               include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
@@ -88,10 +97,6 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         if name not in self.__private_attributes__:
             self.flag_modified(name)
         return super().__setattr__(name, value)
-
-    @classmethod
-    def parse_obj(cls, *args, **kwargs):
-        raise OrmException('Do not use parse_obj with OrmModel')
 
     @classmethod
     def construct(cls, values):  # pylint: disable=arguments-differ
@@ -146,20 +151,22 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return query
 
     @classmethod
-    async def select(cls, where, *, order_by=None):
+    async def select(cls, where, *, order_by=None, skip_parsing=False):
+        construct_func = cls.construct if skip_parsing else cls.parse_obj
         res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None))
         if not res:
             return None
-        res = cls.construct(res)
+        res = construct_func(res)
         res.__bound__ = True
         return res
 
     @classmethod
-    async def select_all(cls, where, *, order_by=None, limit=None, offset=None):
+    async def select_all(cls, where, *, order_by=None, limit=None, offset=None, skip_parsing=False):
+        construct_func = cls.construct if skip_parsing else cls.parse_obj
         q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset))
         res = []
         for x in q_res:
-            res.append(cls.construct(dict(x)))
+            res.append(construct_func(x))
             res[-1].__bound__ = True
         return res
 
