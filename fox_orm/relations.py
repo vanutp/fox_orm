@@ -1,5 +1,5 @@
 import asyncio
-from typing import Union, Type, TypeVar, Generic, Iterator, Optional, List, Awaitable
+from typing import Union, Type, TypeVar, Generic, Iterator, Optional, List
 
 from sqlalchemy import and_, select, Table, exists
 
@@ -121,7 +121,7 @@ class ManyToMany(Generic[MODEL]):
         await asyncio.gather(*queries)
         self.__modified__ = dict()
 
-    def add(self, other: MODEL) -> Awaitable:
+    def add(self, other: MODEL) -> OptionalAwaitable:
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):
@@ -130,7 +130,7 @@ class ManyToMany(Generic[MODEL]):
         self.__modified__[other.id] = True
         return OptionalAwaitable(self.save)
 
-    def delete(self, other: MODEL) -> Awaitable:
+    def delete(self, other: MODEL) -> OptionalAwaitable:
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):
