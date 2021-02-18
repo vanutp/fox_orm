@@ -1,4 +1,4 @@
-# Definition
+# Many to many definition
 
 ## Models
 
@@ -9,7 +9,7 @@ You need to declare two models, between which you want a relation:
 ```
 
 ## Association table
-Then you need to define an association table:
+Then you need to declare an association table:
 ```python hl_lines="20-23"
 {!../src/usage/many_to_many.py!}
 ```

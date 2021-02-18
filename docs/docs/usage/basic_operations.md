@@ -39,7 +39,14 @@ user.flag_modified('data')
 await user.save()
 ```
 
-## Get
+This is not necessary if you set the whole field, like this:
+
+```python
+user.data = {'additional_field': 'value'}
+await user.save()
+```
+
+### Get
 
 `Model.get(obj_id)` is a shorthand for `Model.select(Model.c.id == obj_id)`
 
@@ -47,13 +54,6 @@ For example:
 
 ```python
 user = await User.get(1)
-```
-
-This is not necessary if you set the whole field, like this:
-
-```python
-user.data = {'additional_field': 'value'}
-await user.save()
 ```
 
 ## Select all
@@ -81,7 +81,7 @@ exists = await User.exists(User.c.username == 'test')
 
 ## Delete
 
-You can delete object by calling `Model.delete(expression)` or `instance.delete()`
+You can delete object by calling `instance.delete()` or `Model.delete(expression)`
 
 ```python
 user = await User.select(User.c.username == 'test')

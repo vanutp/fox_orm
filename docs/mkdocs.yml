@@ -22,5 +22,5 @@ nav:
 - Usage:
   - usage/basic_operations.md
   - Many to many:
-    - usage/many_to_many/definition.md
-    - usage/many_to_many/usage.md
+    - Definition: usage/many_to_many/definition.md
+    - Usage: usage/many_to_many/usage.md
