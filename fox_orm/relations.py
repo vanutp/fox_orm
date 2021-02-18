@@ -121,7 +121,7 @@ class ManyToMany(Generic[MODEL]):
         await asyncio.gather(*queries)
         self.__modified__ = dict()
 
-    def add(self, other: MODEL) -> OptionalAwaitable:
+    def add(self, other: MODEL):
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):
@@ -130,7 +130,7 @@ class ManyToMany(Generic[MODEL]):
         self.__modified__[other.id] = True
         return OptionalAwaitable(self.save)
 
-    def delete(self, other: MODEL) -> OptionalAwaitable:
+    def delete(self, other: MODEL):
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):
