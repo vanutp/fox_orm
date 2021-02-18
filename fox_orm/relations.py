@@ -1,5 +1,5 @@
 import asyncio
-from typing import Union, Type, TypeVar, Generic, Iterator, Optional, List
+from typing import Union, Type, TypeVar, Generic, Iterator, Optional, List, Awaitable
 
 from sqlalchemy import and_, select, Table, exists
 
@@ -82,12 +82,12 @@ class ManyToMany(Generic[MODEL]):
         res._initialized = True  # pylint: disable=protected-access
         return res
 
-    async def fetch_ids(self):
+    async def fetch_ids(self) -> List[int]:
         return [x[self.other_id] for x in await FoxOrm.db.fetch_all(self.via.select().where(
             getattr(self.via.c, self.this_id) == self.model.id
         ))]
 
-    async def fetch(self):
+    async def fetch(self) -> None:
         self._raise_if_not_initialized()
         self.model.ensure_id()
         ids = await self.fetch_ids()
@@ -103,7 +103,7 @@ class ManyToMany(Generic[MODEL]):
         if not self._fetched:
             raise NotFetchedException('No values were fetched for this relation, first use .fetch_related()')
 
-    async def save(self):
+    async def save(self) -> None:
         self.model.ensure_id()
         queries = []
         for k, v in self.__modified__.items():
@@ -121,7 +121,7 @@ class ManyToMany(Generic[MODEL]):
         await asyncio.gather(*queries)
         self.__modified__ = dict()
 
-    def add(self, other: MODEL):
+    def add(self, other: MODEL) -> Awaitable:
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):
@@ -130,7 +130,7 @@ class ManyToMany(Generic[MODEL]):
         self.__modified__[other.id] = True
         return OptionalAwaitable(self.save)
 
-    def delete(self, other: MODEL):
+    def delete(self, other: MODEL) -> Awaitable:
         self._raise_if_not_initialized()
         other.ensure_id()
         if not isinstance(other, self.to):

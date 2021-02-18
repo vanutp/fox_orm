@@ -1,4 +1,4 @@
-from typing import Union, Mapping, TYPE_CHECKING, Dict, Any
+from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
 
 EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__'}
+
+MODEL = TypeVar('MODEL', bound='OrmModel')
 
 
 class OrmModelMeta(ModelMetaclass):
@@ -151,7 +153,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return query
 
     @classmethod
-    async def select(cls, where, *, order_by=None, skip_parsing=False):
+    async def select(cls: Type[MODEL], where, *, order_by=None, skip_parsing=False) -> MODEL:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
         res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None))
         if not res:
@@ -161,7 +163,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls, where, *, order_by=None, limit=None, offset=None, skip_parsing=False):
+    async def select_all(cls: Type[MODEL], where, *, order_by=None, limit=None, offset=None, skip_parsing=False) -> \
+            List[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
         q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset))
         res = []
@@ -171,7 +174,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def exists(cls, where):
+    async def exists(cls: Type[MODEL], where) -> bool:
         query = cls._generate_query(where, None, None, None)
         query = exists(query).select()
         return await FoxOrm.db.fetch_val(query)
@@ -179,32 +182,32 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     @classmethod
     async def _delete_cls(cls, where):
         query = cls.__sqla_table__.delete().where(where)
-        return await FoxOrm.db.execute(query)
+        await FoxOrm.db.execute(query)
 
     async def _delete_inst(self):
         self.ensure_id()
         table = self.__class__.__sqla_table__
         query = table.delete().where(table.c.id == self.id)
         self.__bound__ = False
-        return await FoxOrm.db.execute(query)
+        await FoxOrm.db.execute(query)
 
     # pylint: disable=bad-classmethod-argument,no-else-return
     @class_or_instancemethod
-    async def delete(self_or_cls, *args, **kwargs):
+    async def delete(self_or_cls, *args, **kwargs) -> None:
         if isinstance(self_or_cls, type):
             return await self_or_cls._delete_cls(*args, **kwargs)
         else:
             return await self_or_cls._delete_inst(*args, **kwargs)
 
     @classmethod
-    async def count(cls, where):
+    async def count(cls: Type[MODEL], where) -> int:
         query = select([func.count()]).select_from(cls.__sqla_table__)
         if where is not None:
             query = query.where(where)
         return await FoxOrm.db.fetch_val(query)
 
     @classmethod
-    async def get(cls, obj_id: int, skip_parsing=False):
+    async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
         return await cls.select(cls.__sqla_table__.c.id == obj_id, skip_parsing=skip_parsing)
 
     async def _fetch_related(self, field: str):
@@ -214,7 +217,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             raise OrmException('fetch_related argument is not a relation')
         await relation.fetch()
 
-    async def fetch_related(self, *fields: str):
+    async def fetch_related(self, *fields: str) -> None:
         for field in fields:
             await self._fetch_related(field)
 
