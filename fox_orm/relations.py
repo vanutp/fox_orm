@@ -153,7 +153,7 @@ class _GenericIterableRelation(ABC):
         self._raise_if_not_fetched()
         return bool(self._objects)
 
-    def __and__(self: RELATION, other: RELATION) -> List[MODEL]:
+    def __and__(self, other: '_GenericIterableRelation') -> List[MODEL]:
         self._raise_if_not_fetched()
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
