@@ -6,7 +6,7 @@ from sqlalchemy import select, func, Table, exists
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
-from fox_orm.relations import ManyToMany
+from fox_orm.relations import _GenericIterableRelation
 from fox_orm.utils import validate_model, class_or_instancemethod
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ class OrmModelMeta(ModelMetaclass):
 
         super().__init__(name, bases, namespace)
         for i in cls.__fields__:
-            if isinstance(cls.__fields__[i].default, ManyToMany):
+            if isinstance(cls.__fields__[i].default, _GenericIterableRelation):
                 cls.__exclude__.add(i)
         cls.__exclude__.add('id')
 
@@ -62,7 +62,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         self.__modified__ = set()
         self.__bound__ = False
         for i in self.__fields__:
-            if isinstance(self.__fields__[i].default, ManyToMany):
+            if isinstance(self.__fields__[i].default, _GenericIterableRelation):
                 self.__dict__[i] = self.__fields__[i].default._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
 
@@ -212,8 +212,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     async def _fetch_related(self, field: str):
         self.ensure_id()
-        relation: ManyToMany = getattr(self, field)
-        if not isinstance(relation, ManyToMany):
+        relation: _GenericIterableRelation = getattr(self, field)
+        if not isinstance(relation, _GenericIterableRelation):
             raise OrmException('fetch_related argument is not a relation')
         await relation.fetch()
 

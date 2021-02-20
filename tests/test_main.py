@@ -7,7 +7,7 @@ from sqlalchemy import *
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
-from tests.models import metadata, A, B
+from tests.models import metadata, A, B, C
 
 DB_FILE = 'test.db'
 DB_URI = 'sqlite:///test.db'
@@ -192,3 +192,24 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await inst.delete()
         res = await A.exists(A.c.text == 'test_delete_inst')
         self.assertFalse(res)
+
+    async def test_otm(self):
+        b_inst = B(text2='test_otm', n=0)
+        await b_inst.save()
+        c_inst = C()
+        await c_inst.save()
+        await b_inst.c_objs.fetch()
+        self.assertEqual(len(b_inst.c_objs), 0)
+        c_inst.b_id = b_inst.id
+        await c_inst.save()
+        self.assertEqual(len(b_inst.c_objs), 0)
+        await b_inst.c_objs.fetch()
+        self.assertEqual(len(b_inst.c_objs), 1)
+        c_inst_2 = C()
+        await c_inst_2.save()
+        await b_inst.c_objs.add(c_inst_2)
+        c_inst_2 = await C.get(c_inst_2.id)
+        self.assertEqual(c_inst_2.b_id, b_inst.id)
+        b_inst = await B.get(b_inst.id)
+        await b_inst.c_objs.fetch()
+        self.assertEqual(len(b_inst.c_objs), 2)

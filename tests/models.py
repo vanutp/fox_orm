@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import *
 
 from fox_orm.model import OrmModel
-from fox_orm.relations import ManyToMany
+from fox_orm.relations import ManyToMany, OneToMany
 
 metadata = MetaData()
 
@@ -16,6 +16,10 @@ b = Table('b', metadata,
           Column('id', Integer, primary_key=True),
           Column('text2', String, nullable=False),
           Column('n', Integer, nullable=False),
+          )
+c = Table('c', metadata,
+          Column('id', Integer, primary_key=True),
+          Column('b_id', Integer, ForeignKey('b.id')),
           )
 mid = Table('mid', metadata,
             Column('a_id', Integer, ForeignKey('a.id'), primary_key=True),
@@ -41,3 +45,11 @@ class B(OrmModel):
     n: int
 
     a_objs: ManyToMany[A] = ManyToMany(to='test_main.A', via=mid, this_id='b_id', other_id='a_id')
+    c_objs: OneToMany['C'] = OneToMany(to='test_main.C', key='b_id')
+
+
+class C(OrmModel):
+    __sqla_table__ = c
+
+    id: Optional[int]
+    b_id: Optional[int]
