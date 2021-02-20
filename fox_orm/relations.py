@@ -43,6 +43,8 @@ class IdsList(list):
         self.ids.remove(other.id)
 
     def __contains__(self, item: Union[MODEL, int]):  # pylint: disable=unsubscriptable-object
+        if item is None:
+            return False
         if isinstance(item, int):
             return item in self.ids
         return item.id in self.ids
