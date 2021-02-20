@@ -20,6 +20,10 @@ b = Table('b', metadata,
 c = Table('c', metadata,
           Column('id', Integer, primary_key=True),
           Column('b_id', Integer, ForeignKey('b.id')),
+          Column('d_id', Integer, ForeignKey('b.id')),
+          )
+d = Table('d', metadata,
+          Column('id', Integer, primary_key=True),
           )
 mid = Table('mid', metadata,
             Column('a_id', Integer, ForeignKey('a.id'), primary_key=True),
@@ -53,3 +57,11 @@ class C(OrmModel):
 
     id: Optional[int]
     b_id: Optional[int]
+    d_id: Optional[int]
+
+
+class D(OrmModel):
+    __sqla_table__ = d
+
+    id: Optional[int]
+    c_objs: OneToMany['C'] = OneToMany(to='test_main.C', key='d_id')

@@ -47,6 +47,24 @@ class IdsList(list):
             return item in self.ids
         return item.id in self.ids
 
+    def __and__(self, other: 'IdsList'):
+        result = []
+        for x in other:
+            if x.id in self.ids:
+                result.append(x)
+        return result
+
+    def __or__(self, other: 'IdsList'):
+        result = []
+        ids = set()
+        for x in other:
+            result.append(x)
+            ids.add(x.id)
+        for x in self:
+            if x.id not in ids:
+                result.append(x)
+        return result
+
 
 class _GenericIterableRelation(ABC):
     _fetched: bool
@@ -134,6 +152,22 @@ class _GenericIterableRelation(ABC):
             return True
         self._raise_if_not_fetched()
         return bool(self._objects)
+
+    def __and__(self: RELATION, other: RELATION) -> List[MODEL]:
+        self._raise_if_not_fetched()
+        if not isinstance(other, _GenericIterableRelation):
+            raise OrmException('given parameter is not relation')
+        if other.objects_type != self.objects_type:
+            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+        return self._objects & other._objects
+
+    def __or__(self, other: '_GenericIterableRelation') -> List[MODEL]:
+        self._raise_if_not_fetched()
+        if not isinstance(other, _GenericIterableRelation):
+            raise OrmException('given parameter is not relation')
+        if other.objects_type != self.objects_type:
+            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+        return self._objects | other._objects
 
     @classmethod  # pylint: disable=duplicate-code
     def __get_validators__(cls):

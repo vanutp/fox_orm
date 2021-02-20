@@ -7,7 +7,7 @@ from sqlalchemy import *
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
-from tests.models import metadata, A, B, C
+from tests.models import metadata, A, B, C, D
 
 DB_FILE = 'test.db'
 DB_URI = 'sqlite:///test.db'
@@ -213,3 +213,27 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         b_inst = await B.get(b_inst.id)
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 2)
+
+    async def test_otm_or_and(self):
+        b_inst = B(text2='test_otm_or_and', n=0)
+        await b_inst.save()
+        d_inst = D()
+        await d_inst.save()
+        c_inst_1 = C()
+        c_inst_1.d_id = d_inst.id
+        c_inst_1.b_id = b_inst.id
+        await c_inst_1.save()
+        c_inst_2 = C()
+        c_inst_2.d_id = d_inst.id
+        await c_inst_2.save()
+        c_inst_3 = C()
+        c_inst_3.b_id = b_inst.id
+        await c_inst_3.save()
+        await b_inst.c_objs.fetch()
+        await d_inst.c_objs.fetch()
+        self.assertEqual(len(d_inst.c_objs), 2)
+        self.assertEqual(len(b_inst.c_objs), 2)
+        self.assertEqual(len(b_inst.c_objs | d_inst.c_objs), 3)
+        self.assertEqual(len(b_inst.c_objs & d_inst.c_objs), 1)
+        both_have = (b_inst.c_objs & d_inst.c_objs)[0]
+        self.assertEqual(both_have.id, c_inst_1.id)

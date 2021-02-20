@@ -133,6 +133,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         else:
             table = self.__class__.__sqla_table__
             data = self.dict(exclude={'id'})
+            data['id'] = None
             self.id = await FoxOrm.db.execute(table.insert(), data)  # pylint: disable=attribute-defined-outside-init
             self.__bound__ = True
 
