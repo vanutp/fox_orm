@@ -70,7 +70,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     def _init_private_attributes(self):
         self.__modified__ = set()
         self.__bound__ = False
-        for k, v in self.__relations__.items():
+        for k, v in self.__relations__.items():  # pylint: disable=no-member
             self.__dict__[k] = v._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
 
