@@ -27,19 +27,28 @@ class OrmModelMeta(ModelMetaclass):
         if not isinstance(cls.__sqla_table__, Table):
             raise OrmException('__sqla_table__ type should be sqlalchemy.Table')
 
-    def __init__(cls, name, bases, namespace):
+    def __new__(mcs, name, bases, namespace, **kwargs):
         if name == 'OrmModel':
-            return
-        cls._ensure_proper_init()  # pylint: disable=no-value-for-parameter
+            return super().__new__(mcs, name, bases, namespace, **kwargs)
+        new_namespace = {}
+        relation_namespace = {}
+        exclude = set()
+        for k, v in namespace.items():
+            if isinstance(v, _GenericIterableRelation):
+                relation_namespace[k] = v
+                exclude.add(k)
+            else:
+                new_namespace[k] = v
+        new_namespace['__annotations__'] = {}
+        for k, v in namespace['__annotations__'].items():
+            if k not in exclude:
+                new_namespace['__annotations__'][k] = v
+        cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
+        cls._ensure_proper_init()
         cls.c = cls.__sqla_table__.c
-
-        cls.__exclude__ = EXCLUDE_KEYS.copy()
-
-        super().__init__(name, bases, namespace)
-        for i in cls.__fields__:
-            if isinstance(cls.__fields__[i].default, _GenericIterableRelation):
-                cls.__exclude__.add(i)
-        cls.__exclude__.add('id')
+        cls.__exclude__ = EXCLUDE_KEYS.copy() | exclude | {'id'}
+        cls.__relations__ = relation_namespace
+        return cls
 
 
 class OrmModel(BaseModel, metaclass=OrmModelMeta):
@@ -61,9 +70,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     def _init_private_attributes(self):
         self.__modified__ = set()
         self.__bound__ = False
-        for i in self.__fields__:
-            if isinstance(self.__fields__[i].default, _GenericIterableRelation):
-                self.__dict__[i] = self.__fields__[i].default._init_copy(self)  # pylint: disable=protected-access
+        for k, v in self.__relations__.items():
+            self.__dict__[k] = v._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
 
     def __init__(self, **data: Any) -> None:  # pylint: disable=super-init-not-called
