@@ -2,7 +2,6 @@ import os
 import unittest
 from typing import List
 
-from pydantic import ValidationError
 from sqlalchemy import *
 
 from fox_orm import FoxOrm
@@ -122,7 +121,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_bad(self):
         a_inst = A(text='test_bad', n=0)
         await a_inst.save()
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValueError):
             a_inst.b_objs = 1874
         with self.assertRaises(OrmException):
             a_inst.id = 1874

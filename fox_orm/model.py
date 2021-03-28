@@ -106,6 +106,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             return object.__setattr__(self, name, value)
         if name not in self.__private_attributes__:
             self.flag_modified(name)
+        if name in self.__relations__:
+            raise ValueError('Do not set relation field')
         return super().__setattr__(name, value)
 
     @classmethod

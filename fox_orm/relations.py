@@ -171,14 +171,6 @@ class _GenericIterableRelation(ABC):
             raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
         return self._objects | other._objects
 
-    @classmethod  # pylint: disable=duplicate-code
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        raise TypeError('Do not set relation field')
-
 
 class ManyToMany(Generic[MODEL], _GenericIterableRelation):
     to: Union[Type[MODEL], str]  # pylint: disable=unsubscriptable-object
