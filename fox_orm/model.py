@@ -1,3 +1,4 @@
+import asyncio
 from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
 
 from pydantic import BaseModel
@@ -224,16 +225,15 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
         return await cls.select(cls.__sqla_table__.c.id == obj_id, skip_parsing=skip_parsing)
 
-    async def _fetch_related(self, field: str):
-        self.ensure_id()
-        relation: _GenericIterableRelation = getattr(self, field)
-        if not isinstance(relation, _GenericIterableRelation):
-            raise OrmException('fetch_related argument is not a relation')
-        await relation.fetch()
-
     async def fetch_related(self, *fields: str) -> None:
+        self.ensure_id()
+        tasks = []
         for field in fields:
-            await self._fetch_related(field)
+            relation: _GenericIterableRelation = getattr(self, field)
+            if not isinstance(relation, _GenericIterableRelation):
+                raise OrmException('fetch_related argument is not a relation')
+            tasks.append(relation.fetch())
+        await asyncio.gather(*tasks)
 
 
 __all__ = ['OrmModel']
