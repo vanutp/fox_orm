@@ -46,7 +46,7 @@ class OrmModelMeta(ModelMetaclass):
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
         cls._ensure_proper_init()
         cls.c = cls.__sqla_table__.c
-        cls.__exclude__ = EXCLUDE_KEYS.copy() | exclude | {'id'}
+        cls.__exclude__ = EXCLUDE_KEYS.copy() | exclude
         cls.__relations__ = relation_namespace
         return cls
 
@@ -87,7 +87,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
               include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
               exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None, exclude_unset: bool = False,
               exclude_defaults: bool = False, exclude_none: bool = False) -> 'TupleGenerator':
-        exclude_private = self.__exclude__ - {'id'} | EXCLUDE_KEYS
+        exclude_private = self.__exclude__ | EXCLUDE_KEYS
         if exclude is None:
             exclude = exclude_private
         elif isinstance(exclude, Mapping):  # pylint: disable=isinstance-second-argument-not-valid-type
@@ -143,6 +143,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             data = self.dict(exclude={'id'})
             if len(data) == 0:
                 data['id'] = None
+            if self.id is not None:
+                data['id'] = self.id
             self.id = await FoxOrm.db.execute(table.insert(), data)  # pylint: disable=attribute-defined-outside-init
             self.__bound__ = True
 

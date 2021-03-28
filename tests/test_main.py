@@ -237,3 +237,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(b_inst.c_objs & d_inst.c_objs), 1)
         both_have = (b_inst.c_objs & d_inst.c_objs)[0]
         self.assertEqual(both_have.id, c_inst_1.id)
+
+    async def test_custom_id(self):
+        inst = A(id=1874, text='test_custom_id', n=1)
+        await inst.save()
+        self.assertEqual(inst.id, 1874)
+        await A.get(1874)
+
+        inst_2 = A(text='test_custom_id', n=2)
+        inst_2.id = 1875
+        await inst_2.save()
+        await A.get(1875)
