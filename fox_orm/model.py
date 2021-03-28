@@ -60,6 +60,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     __private_attributes__: Dict[str, Any]
     __sqla_table__: Table
     __exclude__: set
+    __relations__: dict
 
     # instance attrs
     __modified__: set
@@ -131,6 +132,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         if getattr(self, 'id', None) is None:
             raise OrmException('id must be set')
 
+    # pylint: disable=access-member-before-definition
     async def save(self):
         if self.__bound__:
             self.ensure_id()
