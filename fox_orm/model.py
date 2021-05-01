@@ -139,7 +139,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             if not self.__modified__:
                 return
             table = self.__class__.__sqla_table__
-            fields = {k: getattr(self, k) for k in self.__modified__}
+            fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
             await FoxOrm.db.execute(table.update().where(table.c.id == self.id), fields)
             self.__modified__ = set()
