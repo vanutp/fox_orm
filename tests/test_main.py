@@ -6,7 +6,7 @@ from sqlalchemy import *
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
-from tests.models import metadata, A, B, C, D
+from tests.models import metadata, A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
 
 DB_FILE = 'test.db'
 DB_URI = 'sqlite:///test.db'
@@ -247,3 +247,15 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst_2.id = 1875
         await inst_2.save()
         await A.get(1875)
+
+    async def test_recursive_serialization(self):
+        inst = A(text='test_recursive_serialization', n=1)
+        await inst.save()
+        inst.recursive = RecursiveTest(a=[RecursiveTest2(a='123')])
+        await inst.save()
+
+    async def test_extra_fields(self):
+        inst = ExtraFields()
+        inst._test = 123
+        await inst.save()
+        inst = await ExtraFields.get(inst.id)
