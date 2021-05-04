@@ -145,7 +145,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__modified__ = set()
         else:
             table = self.__class__.__sqla_table__
-            data = self.dict(exclude={'id'})
+            data = self.dict(exclude={'id'}, include=self.__fields__.keys())
             if len(data) == 0:
                 data['id'] = None
             if self.id is not None:
