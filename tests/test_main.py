@@ -259,3 +259,18 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst._test = 123
         await inst.save()
         inst = await ExtraFields.get(inst.id)
+
+    async def test_select_sqla_core(self):
+        from tests.models import a
+        inst = A(text='test_select_sqla_core', n=0)
+        await inst.save()
+        inst = await A.select(a.select().where(A.c.text == 'test_select_sqla_core'))
+        self.assertIsNotNone(inst)
+        self.assertEqual(inst.text, 'test_select_sqla_core')
+
+    async def test_select_raw_sql(self):
+        inst = A(text='test_select_raw_sql', n=0)
+        await inst.save()
+        inst = await A.select('''select * from a where text = :text''', {'text': 'test_select_raw_sql'})
+        self.assertIsNotNone(inst)
+        self.assertEqual(inst.text, 'test_select_raw_sql')

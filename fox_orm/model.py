@@ -1,9 +1,11 @@
 import asyncio
-from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
+from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
 from sqlalchemy import select, func, Table, exists
+from sqlalchemy.sql import ClauseElement
+from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
@@ -155,9 +157,14 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     def _generate_query(cls, where, order_by, limit, offset):
-        query = cls.__sqla_table__.select()
-        if where is not None:
-            query = query.where(where)
+        if isinstance(where, str):
+            return where
+        if isinstance(where, ClauseElement) and not isinstance(where, ColumnElement):
+            query = where
+        else:
+            query = cls.__sqla_table__.select()
+            if where is not None:
+                query = query.where(where)
         if order_by is not None:
             if not isinstance(order_by, list):
                 order_by = [order_by]
@@ -170,9 +177,10 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return query
 
     @classmethod
-    async def select(cls: Type[MODEL], where, *, order_by=None, skip_parsing=False) -> MODEL:
+    async def select(cls: Type[MODEL], where, values: dict = None, *,
+                     order_by=None, skip_parsing=False) -> Optional[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
-        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None))
+        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None), values)
         if not res:
             return None
         res = construct_func(res)
@@ -180,10 +188,10 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls: Type[MODEL], where, *, order_by=None, limit=None, offset=None, skip_parsing=False) -> \
-            List[MODEL]:
+    async def select_all(cls: Type[MODEL], where, values: dict = None, *,
+                         order_by=None, limit=None, offset=None, skip_parsing=False) -> List[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
-        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset))
+        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset), values)
         res = []
         for x in q_res:
             res.append(construct_func(x))
@@ -191,15 +199,15 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def exists(cls: Type[MODEL], where) -> bool:
+    async def exists(cls: Type[MODEL], where, values: dict = None) -> bool:
         query = cls._generate_query(where, None, None, None)
         query = exists(query).select()
-        return await FoxOrm.db.fetch_val(query)
+        return await FoxOrm.db.fetch_val(query, values)
 
     @classmethod
-    async def _delete_cls(cls, where):
+    async def _delete_cls(cls, where, values: dict = None):
         query = cls.__sqla_table__.delete().where(where)
-        await FoxOrm.db.execute(query)
+        await FoxOrm.db.execute(query, values)
 
     async def _delete_inst(self):
         self.ensure_id()
@@ -217,11 +225,11 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             return await self_or_cls._delete_inst(*args, **kwargs)
 
     @classmethod
-    async def count(cls: Type[MODEL], where) -> int:
+    async def count(cls: Type[MODEL], where, values: dict = None) -> int:
         query = select([func.count()]).select_from(cls.__sqla_table__)
         if where is not None:
             query = query.where(where)
-        return await FoxOrm.db.fetch_val(query)
+        return await FoxOrm.db.fetch_val(query, values)
 
     @classmethod
     async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:

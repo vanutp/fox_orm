@@ -86,6 +86,9 @@ def validate_model(
             if check_extra:
                 names_used.add(field.name if using_name else field.alias)
 
+        if not issubclass(field.type_, str) and value == 'null':
+            value = None
+
         v_, errors_ = field.validate(value, values, loc=field.alias, cls=cls_)
         if isinstance(errors_, ErrorWrapper):
             errors.append(errors_)
