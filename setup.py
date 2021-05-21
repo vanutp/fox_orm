@@ -8,7 +8,7 @@ with open(requirements) as f:
 
 setuptools.setup(
     name='fox-orm',
-    version='0.2.4',
+    version='0.2.4.1',
     author='vanutp',
     author_email='hello@vanutp.dev',
     description='Simple pydantic & databases based orm',
