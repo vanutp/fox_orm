@@ -6,64 +6,57 @@ from sqlalchemy import and_, select, Table, exists
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import WTFException, NotFetchedException, OrmException
-from fox_orm.utils import full_import, OptionalAwaitable
+from fox_orm.internal.utils import full_import, OptionalAwaitable
 
 MODEL = TypeVar('MODEL', bound='OrmModel')
 RELATION = TypeVar('RELATION', bound='_GenericIterableRelation')
 
 
-class IdsList(list):
-    ids: set
+class HashList(list):
+    map: dict
 
     def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
-        self.ids = set()
+        self.map = dict()
         if items is not None:
             super().__init__(items)
-            for x in items:
-                self.ids.add(x.id)
+            for i, x in enumerate(items):
+                self.map[x.id] = i
         else:
             super().__init__()
 
     def add(self, other: MODEL):
-        if other.id in self.ids:
+        if other.id in self.map:
             return
         self.append(other)
-        self.ids.add(other.id)
+        self.map[other.id] = len(self) - 1
 
     def delete(self, other: MODEL):
-        if other.id not in self.ids:
+        if other.id not in self.map:
             return
-        for i, x in enumerate(self):
-            if x.id == other.id:
-                to_delete = i
-                break
-        else:
-            raise WTFException('Object not in list')
-        del self[to_delete]
-        self.ids.remove(other.id)
+        del self[self.map[other.id]]
+        del self.map[other.id]
 
-    def __contains__(self, item: Union[MODEL, int]):  # pylint: disable=unsubscriptable-object
+    def __contains__(self, item: Optional[Union[MODEL, int]]):  # pylint: disable=unsubscriptable-object
         if item is None:
             return False
         if isinstance(item, int):
-            return item in self.ids
-        return item.id in self.ids
+            return item in self.map
+        else:
+            return item.id in self.map
 
-    def __and__(self, other: 'IdsList'):
+    def __and__(self, other: 'HashList'):
         result = []
         for x in other:
-            if x.id in self.ids:
+            if x.id in self.map:
                 result.append(x)
         return result
 
-    def __or__(self, other: 'IdsList'):
+    def __or__(self, other: 'HashList'):
         result = []
-        ids = set()
         for x in other:
             result.append(x)
-            ids.add(x.id)
         for x in self:
-            if x.id not in ids:
+            if x.id not in other.map:
                 result.append(x)
         return result
 
@@ -71,13 +64,13 @@ class IdsList(list):
 class _GenericIterableRelation(ABC):
     _fetched: bool
     _initialized: bool
-    _objects: IdsList
+    _objects: HashList
     __modified__: dict
 
     model: MODEL
 
     def __init__(self):
-        self._objects = IdsList()
+        self._objects = HashList()
         self.__modified__ = dict()
         self._fetched = False
         self._initialized = False
@@ -103,7 +96,7 @@ class _GenericIterableRelation(ABC):
         self._raise_if_not_initialized()
         self.model.ensure_id()
         ids = await self.fetch_ids()
-        self._objects = IdsList(await asyncio.gather(*[self.objects_type.get(x) for x in ids]))
+        self._objects = HashList(await asyncio.gather(*[self.objects_type.get(x) for x in ids]))
         self._fetched = True
 
     def _raise_if_not_initialized(self):
@@ -282,3 +275,6 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
                 }))
         await asyncio.gather(*queries)
         self.__modified__ = dict()
+
+
+__all__ = ['ManyToMany', 'OneToMany']

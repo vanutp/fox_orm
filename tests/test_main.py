@@ -6,7 +6,7 @@ from sqlalchemy import *
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
-from tests.models import metadata, A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
+from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
 
 DB_FILE = 'test.db'
 DB_URI = 'sqlite:///test.db'
@@ -18,7 +18,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
         FoxOrm.init(DB_URI)
-        metadata.create_all(create_engine(DB_URI))
+        FoxOrm.metadata.create_all(create_engine(DB_URI))
 
     async def test_insert(self):
         a_inst = A(text='test', n=0)
@@ -118,7 +118,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await a_inst_2.b_objs.fetch()
         self.assertNotIn(b_inst, a_inst_2.b_objs)
 
-    async def test_bad(self):
+    async def test_bad_assignments(self):
         a_inst = A(text='test_bad', n=0)
         await a_inst.save()
         with self.assertRaises(ValueError):
@@ -169,13 +169,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(obj.text, 'test_order_by')
             self.assertEqual(obj.n, i)
             i += 1
-
-    async def test_bad_model(self):
-        from fox_orm.model import OrmModel
-        from typing import Optional
-        with self.assertRaises(OrmException):
-            class Model(OrmModel):
-                id: Optional[int]
 
     async def test_delete(self):
         for i in range(10):
@@ -261,10 +254,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst = await ExtraFields.get(inst.id)
 
     async def test_select_sqla_core(self):
-        from tests.models import a
         inst = A(text='test_select_sqla_core', n=0)
         await inst.save()
-        inst = await A.select(a.select().where(A.c.text == 'test_select_sqla_core'))
+        inst = await A.select(A.__sqla_table__.select().where(A.c.text == 'test_select_sqla_core'))
         self.assertIsNotNone(inst)
         self.assertEqual(inst.text, 'test_select_sqla_core')
 

@@ -1,10 +1,4 @@
-import os
-
 import setuptools
-
-requirements = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'requirements.txt')
-with open(requirements) as f:
-    install_requires = f.read().splitlines()
 
 setuptools.setup(
     name='fox-orm',
@@ -14,12 +8,10 @@ setuptools.setup(
     description='Simple pydantic & databases based orm',
     url='https://hub.vanutp.dev',
     packages=setuptools.find_packages(),
-    install_requires=install_requires,
-    extras_require={
-        'dev': [
-            'aiosqlite',
-            'pylint'
-        ]
-    },
+    install_requires=[
+        'databases~=0.4.3',
+        'pydantic~=1.8.2',
+        'SQLAlchemy~=1.3.24',
+    ],
     python_requires='>=3.8',
 )

@@ -1,3 +1,4 @@
+import re
 from typing import Type, Tuple, Optional, TYPE_CHECKING
 
 from pydantic import ValidationError, Extra, ConfigError, ExtraError, MissingError
@@ -133,4 +134,15 @@ class class_or_instancemethod(classmethod):
         return descr_get(instance, type_)
 
 
-__all__ = ['full_import', 'OptionalAwaitable', 'validate_model', 'class_or_instancemethod']
+CAMEL_TO_SNAKE_PAT1 = re.compile(r'(.)([A-Z][a-z]+)')
+CAMEL_TO_SNAKE_PAT2 = re.compile(r'([a-z0-9])([A-Z])')
+
+
+def camel_to_snake(name):
+    name = CAMEL_TO_SNAKE_PAT1.sub(r'\1_\2', name)
+    return CAMEL_TO_SNAKE_PAT2.sub(r'\1_\2', name).lower()
+
+
+class NonInstantiable:
+    def __new__(cls, *args, **kwargs):
+        raise TypeError(f'Object of type {cls.__qualname__} is not instantiable')

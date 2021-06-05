@@ -3,14 +3,16 @@ from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
-from sqlalchemy import select, func, Table, exists
+from sqlalchemy import select, func, Table, exists, Column
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
+from fox_orm.internal import FieldType
+from fox_orm.internal.table import construct_column
 from fox_orm.relations import _GenericIterableRelation
-from fox_orm.utils import validate_model, class_or_instancemethod
+from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
@@ -20,37 +22,66 @@ EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__'}
 
 MODEL = TypeVar('MODEL', bound='OrmModel')
 
+def is_valid_column(name):
+    return not (name.startswith('_') or name == 'Config')
 
 class OrmModelMeta(ModelMetaclass):
-    __sqla_table__: Table
+    if TYPE_CHECKING:
+        __sqla_table__: Table
 
-    def _ensure_proper_init(cls):
-        if not hasattr(cls, '__sqla_table__'):
-            raise OrmException('__sqla_table__ must be set')
-        if not isinstance(cls.__sqla_table__, Table):
-            raise OrmException('__sqla_table__ type should be sqlalchemy.Table')
+    @classmethod
+    def _ensure_proper_init(mcs, namespace):
+        if '__sqla_table__' in namespace:
+            raise OrmException('You are using pre 0.3 model syntax. Check the docs for new instructions')
+        if '__table__' in namespace and not isinstance(namespace['__table__'], str):
+            raise OrmException('__table__ must be of type str')
 
     def __new__(mcs, name, bases, namespace, **kwargs):
-        if name == 'OrmModel':
+        if bases[0] == BaseModel:
             return super().__new__(mcs, name, bases, namespace, **kwargs)
+
+        mcs._ensure_proper_init(namespace)
+
         new_namespace = {}
         relation_namespace = {}
-        exclude = set()
         for k, v in namespace.items():
+            if k == '__table__':
+                continue
             if isinstance(v, _GenericIterableRelation):
                 relation_namespace[k] = v
-                exclude.add(k)
             else:
                 new_namespace[k] = v
-        new_namespace['__annotations__'] = {}
+
+        new_namespace['__annotations__'] = annotations = {}
         for k, v in namespace['__annotations__'].items():
-            if k not in exclude:
-                new_namespace['__annotations__'][k] = v
+            if k in relation_namespace:
+                continue
+            annotations[k] = v
+
+        columns = []
+        processed_columns = set()
+        table_name = namespace.get('__table__', None) or camel_to_snake(name)
+        for column_name in new_namespace:
+            if not is_valid_column(column_name):
+                continue
+            if column_name not in annotations:
+                raise OrmException(f'Unannotated field {column_name}')
+            column, value = construct_column(column_name, annotations[column_name], new_namespace[column_name])
+            columns.append(column)
+            new_namespace[column_name] = value
+            processed_columns.add(column_name)
+        for column_name, annotation in annotations.items():
+            if not is_valid_column(column_name):
+                continue
+            if column_name not in processed_columns:
+                columns.append(construct_column(column_name, annotations[column_name], tuple())[0])
+        table = Table(table_name, FoxOrm.metadata, *columns)
+
+        new_namespace['__sqla_table__'] = table
+        new_namespace['c'] = table.c
+        new_namespace['__relations__'] = relation_namespace
+
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
-        cls._ensure_proper_init()
-        cls.c = cls.__sqla_table__.c
-        cls.__exclude__ = EXCLUDE_KEYS.copy() | exclude
-        cls.__relations__ = relation_namespace
         return cls
 
 
@@ -58,18 +89,23 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     class Config:
         validate_assignment = True
 
-    # cls attrs
-    __private_attributes__: Dict[str, Any]
-    __sqla_table__: Table
-    __exclude__: set
-    __relations__: dict
+    if TYPE_CHECKING:
+        # cls attrs
+        __private_attributes__: Dict[str, Any]
+        __sqla_table__: Table
+        __relations__: dict
 
-    # instance attrs
-    __modified__: set
-    __bound__: bool
+        # instance attrs
+        __modified__: set
+        __bound__: bool
+
+    __class_vars__ = {'c'}
+
+    __slots__ = ('__fields_set__', '__modified__', '__bound__')
 
     def __repr_args__(self) -> 'ReprArgs':
-        return [(k, v) for k, v in self.__dict__.items() if k not in self.__exclude__]
+        exclude = EXCLUDE_KEYS | set(self.__relations__.keys())
+        return [(k, v) for k, v in self.__dict__.items() if k not in exclude]
 
     def _init_private_attributes(self):
         self.__modified__ = set()
@@ -78,20 +114,12 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__dict__[k] = v._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
 
-    def __init__(self, **data: Any) -> None:  # pylint: disable=super-init-not-called
-        values, fields_set, validation_error = validate_model(self.__class__, data)
-        if validation_error:
-            raise validation_error  # pylint: disable=raising-bad-type
-        object.__setattr__(self, '__dict__', values)
-        object.__setattr__(self, '__fields_set__', fields_set)
-        self._init_private_attributes()
-
     # pylint: disable=unsubscriptable-object, too-many-arguments
     def _iter(self, to_dict: bool = False, by_alias: bool = False,
               include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
               exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None, exclude_unset: bool = False,
               exclude_defaults: bool = False, exclude_none: bool = False) -> 'TupleGenerator':
-        exclude_private = self.__exclude__ | EXCLUDE_KEYS
+        exclude_private = EXCLUDE_KEYS
         if exclude is None:
             exclude = exclude_private
         elif isinstance(exclude, Mapping):  # pylint: disable=isinstance-second-argument-not-valid-type
@@ -144,7 +172,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
             await FoxOrm.db.execute(table.update().where(table.c.id == self.id), fields)
-            self.__modified__ = set()
+            self.__modified__.clear()
         else:
             table = self.__class__.__sqla_table__
             data = self.dict(exclude={'id'}, include=self.__fields__.keys())
