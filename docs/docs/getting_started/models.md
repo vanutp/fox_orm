@@ -14,7 +14,7 @@ From [SQLAlchemy core tutorial](https://docs.sqlalchemy.org/en/14/core/metadata.
 
 ## Declare FoxOrm models
 
-They are very simular to pydantic models, but with some exceptions:
+They are very similar to pydantic models, but with some exceptions:
 
 * id field must be declared and must be of type `Optional[int]`
 * set `__sqla_table__` to corresponding sqlalchemy's `Table` object
