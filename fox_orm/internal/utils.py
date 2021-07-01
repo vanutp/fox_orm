@@ -1,3 +1,4 @@
+import importlib
 import re
 from typing import Type, Tuple, Optional, TYPE_CHECKING
 
@@ -6,6 +7,8 @@ from pydantic.error_wrappers import ErrorWrapper
 from pydantic.typing import ForwardRef
 from pydantic.utils import ROOT_KEY, GetterDict
 
+from fox_orm.internal.const import EXCLUDE_KEYS
+
 if TYPE_CHECKING:
     from fox_orm.model import OrmModel
     from pydantic.types import ModelOrDc  # pylint: disable=no-name-in-module,ungrouped-imports
@@ -13,10 +16,9 @@ if TYPE_CHECKING:
 
 
 def full_import(name):
-    components = name.split('.')
-    mod = __import__(components[0])
-    for comp in components[1:]:
-        mod = getattr(mod, comp)
+    mod, attr = name.rsplit('.', 1)
+    mod = importlib.import_module(mod)
+    mod = getattr(mod, attr)
     return mod
 
 
@@ -33,6 +35,7 @@ class OptionalAwaitable:
 _missing = object()
 
 
+# TODO: add tests
 def validate_model(
         model: Type['OrmModel'], input_data: 'DictStrAny', cls: 'ModelOrDc' = None
 ) -> Tuple['DictStrAny', 'SetStr', Optional[ValidationError]]:
@@ -57,7 +60,7 @@ def validate_model(
             return {}, set(), ValidationError([ErrorWrapper(exc, loc=ROOT_KEY)], cls_)
 
     for name, field in model.__fields__.items():
-        if name in model.__exclude__ and name != 'id':
+        if name in EXCLUDE_KEYS and name != 'id':
             values[name] = field.default
             continue
         if field.type_.__class__ == ForwardRef:

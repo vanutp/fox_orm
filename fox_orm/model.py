@@ -3,38 +3,43 @@ from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
-from sqlalchemy import select, func, Table, exists, Column
+from sqlalchemy import select, func, Table, exists, MetaData
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
-from fox_orm.exceptions import OrmException
-from fox_orm.internal import FieldType
+from fox_orm.exceptions import OrmException, WTFException
+from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
+from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
 from fox_orm.relations import _GenericIterableRelation
-from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
     from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
 
-EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__'}
-
 MODEL = TypeVar('MODEL', bound='OrmModel')
+
 
 def is_valid_column(name):
     return not (name.startswith('_') or name == 'Config')
 
+
 class OrmModelMeta(ModelMetaclass):
     if TYPE_CHECKING:
-        __sqla_table__: Table
+        __table__: Table
+        __tablename__: str
 
     @classmethod
     def _ensure_proper_init(mcs, namespace):
         if '__sqla_table__' in namespace:
             raise OrmException('You are using pre 0.3 model syntax. Check the docs for new instructions')
-        if '__table__' in namespace and not isinstance(namespace['__table__'], str):
-            raise OrmException('__table__ must be of type str')
+        if '__table__' in namespace:
+            raise OrmException('__table__ should not be set')
+        if '__tablename__' in namespace and not isinstance(namespace['__tablename__'], str):
+            raise OrmException('__tablename__ must be of type str')
+        if '__metadata__' in namespace and not isinstance(namespace['__metadata__'], MetaData):
+            raise OrmException('__metadata__ must be of type MetaData')
 
     def __new__(mcs, name, bases, namespace, **kwargs):
         if bases[0] == BaseModel:
@@ -42,10 +47,13 @@ class OrmModelMeta(ModelMetaclass):
 
         mcs._ensure_proper_init(namespace)
 
+        table_name = namespace.get('__tablename__', None) or camel_to_snake(name)
+        metadata = namespace.get('__metadata__', None) or FoxOrm.metadata
+
         new_namespace = {}
         relation_namespace = {}
         for k, v in namespace.items():
-            if k == '__table__':
+            if k == '__tablename__':
                 continue
             if isinstance(v, _GenericIterableRelation):
                 relation_namespace[k] = v
@@ -53,14 +61,14 @@ class OrmModelMeta(ModelMetaclass):
                 new_namespace[k] = v
 
         new_namespace['__annotations__'] = annotations = {}
-        for k, v in namespace['__annotations__'].items():
+        for k, v in namespace.get('__annotations__', {}).items():
             if k in relation_namespace:
                 continue
             annotations[k] = v
 
+
         columns = []
         processed_columns = set()
-        table_name = namespace.get('__table__', None) or camel_to_snake(name)
         for column_name in new_namespace:
             if not is_valid_column(column_name):
                 continue
@@ -75,13 +83,18 @@ class OrmModelMeta(ModelMetaclass):
                 continue
             if column_name not in processed_columns:
                 columns.append(construct_column(column_name, annotations[column_name], tuple())[0])
-        table = Table(table_name, FoxOrm.metadata, *columns)
+                processed_columns.add(column_name)
+        if 'id' not in processed_columns:
+            raise OrmException('id field is missing')
+        table = Table(table_name, metadata, *columns)
 
-        new_namespace['__sqla_table__'] = table
+        new_namespace['__table__'] = table
         new_namespace['c'] = table.c
         new_namespace['__relations__'] = relation_namespace
 
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
+        for rel in relation_namespace.values():
+            FoxOrm._lazyinit_relation(metadata, rel, cls)
         return cls
 
 
@@ -92,7 +105,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     if TYPE_CHECKING:
         # cls attrs
         __private_attributes__: Dict[str, Any]
-        __sqla_table__: Table
+        __table__: Table
         __relations__: dict
 
         # instance attrs
@@ -113,6 +126,15 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         for k, v in self.__relations__.items():  # pylint: disable=no-member
             self.__dict__[k] = v._init_copy(self)  # pylint: disable=protected-access
         super()._init_private_attributes()
+
+    # noinspection PyMissingConstructor
+    def __init__(self, **data: Any) -> None:  # pylint: disable=super-init-not-called
+        values, fields_set, validation_error = validate_model(self.__class__, data)
+        if validation_error:
+            raise validation_error  # pylint: disable=raising-bad-type
+        object.__setattr__(self, '__dict__', values)
+        object.__setattr__(self, '__fields_set__', fields_set)
+        self._init_private_attributes()
 
     # pylint: disable=unsubscriptable-object, too-many-arguments
     def _iter(self, to_dict: bool = False, by_alias: bool = False,
@@ -146,7 +168,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     def construct(cls, values):  # pylint: disable=arguments-differ
         m = cls.__new__(cls)
         fields_values = {name: field.get_default() for name, field in cls.__fields__.items() if
-                         not field.required and field.name not in cls.__exclude__}
+                         not field.required and field.name not in EXCLUDE_KEYS}
         fields_values.update(values)
         object.__setattr__(m, '__dict__', fields_values)
         object.__setattr__(m, '__fields_set__', set(values.keys()))
@@ -160,7 +182,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         if not self.__bound__:
             raise OrmException('Object is not bound to db, execute insert first')
         if getattr(self, 'id', None) is None:
-            raise OrmException('id must be set')
+            raise WTFException('id not set')
 
     # pylint: disable=access-member-before-definition
     async def save(self):
@@ -168,13 +190,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.ensure_id()
             if not self.__modified__:
                 return
-            table = self.__class__.__sqla_table__
+            table = self.__class__.__table__
             fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
             await FoxOrm.db.execute(table.update().where(table.c.id == self.id), fields)
             self.__modified__.clear()
         else:
-            table = self.__class__.__sqla_table__
+            table = self.__class__.__table__
             data = self.dict(exclude={'id'}, include=self.__fields__.keys())
             if len(data) == 0:
                 data['id'] = None
@@ -190,7 +212,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         if isinstance(where, ClauseElement) and not isinstance(where, ColumnElement):
             query = where
         else:
-            query = cls.__sqla_table__.select()
+            query = cls.__table__.select()
             if where is not None:
                 query = query.where(where)
         if order_by is not None:
@@ -234,12 +256,12 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     async def _delete_cls(cls, where, values: dict = None):
-        query = cls.__sqla_table__.delete().where(where)
+        query = cls.__table__.delete().where(where)
         await FoxOrm.db.execute(query, values)
 
     async def _delete_inst(self):
         self.ensure_id()
-        table = self.__class__.__sqla_table__
+        table = self.__class__.__table__
         query = table.delete().where(table.c.id == self.id)
         self.__bound__ = False
         await FoxOrm.db.execute(query)
@@ -254,14 +276,14 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     async def count(cls: Type[MODEL], where, values: dict = None) -> int:
-        query = select([func.count()]).select_from(cls.__sqla_table__)
+        query = select([func.count()]).select_from(cls.__table__)
         if where is not None:
             query = query.where(where)
         return await FoxOrm.db.fetch_val(query, values)
 
     @classmethod
     async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
-        return await cls.select(cls.__sqla_table__.c.id == obj_id, skip_parsing=skip_parsing)
+        return await cls.select(cls.__table__.c.id == obj_id, skip_parsing=skip_parsing)
 
     async def fetch_related(self, *fields: str) -> None:
         self.ensure_id()

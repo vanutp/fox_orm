@@ -1,12 +1,13 @@
 import os
 import unittest
-from typing import List
+from typing import List, Optional
 
-from sqlalchemy import *
+from sqlalchemy import create_engine
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
 from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
+from tests.utils import schema_to_set
 
 DB_FILE = 'test.db'
 DB_URI = 'sqlite:///test.db'
@@ -18,7 +19,111 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
         FoxOrm.init(DB_URI)
-        FoxOrm.metadata.create_all(create_engine(DB_URI))
+        cls.engine = create_engine(DB_URI)
+        FoxOrm.metadata.create_all(cls.engine)
+
+    async def test_table_generation(self):
+        from datetime import datetime, date, time, timedelta
+        from pydantic import BaseModel
+        from sqlalchemy import Integer, Float, String, Boolean, DateTime, Date, Time, Interval, JSON
+        from fox_orm import OrmModel, pk
+
+        class AllTypesHelper(BaseModel):
+            a: str
+            b: int
+
+        class AllTypes(OrmModel):
+            id: Optional[int] = pk
+            int_: int
+            float_: float
+            str_: str
+            bool_: bool
+
+            datetime_: datetime
+            date_: date
+            time_: time
+            timedelta_: timedelta
+
+            dict_: dict
+            list_: list
+            implicit_json: AllTypesHelper
+
+        all_types_proper_schema = {
+            ('id', Integer),
+            ('int_', Integer),
+            ('float_', Float),
+            ('str_', String),
+            ('bool_', Boolean),
+            ('datetime_', DateTime),
+            ('date_', Date),
+            ('time_', Time),
+            ('timedelta_', Interval),
+            ('dict_', JSON),
+            ('list_', JSON),
+            ('implicit_json', JSON),
+        }
+        self.assertEqual(schema_to_set(AllTypes.__table__), all_types_proper_schema)
+        self.assertFalse('_test' in ExtraFields.__table__.columns)
+
+        FoxOrm.metadata.create_all(self.engine)
+
+    async def test_relationship_generation(self):
+        from sqlalchemy import MetaData, Integer
+        from fox_orm import OrmModel, pk, ManyToMany
+
+        metadata = MetaData()
+
+        class RelA(OrmModel):
+            __metadata__ = metadata
+            id: Optional[int] = pk
+            b_objs: ManyToMany['B'] = ManyToMany(to='placeholder', via='mid')
+
+        class RelB(OrmModel):
+            __metadata__ = metadata
+            id: Optional[int] = pk
+            a_objs: ManyToMany['A'] = ManyToMany(to=RelA, via='mid')
+
+        RelA.__relations__['b_objs']._to = RelB
+
+        FoxOrm.init_relations(metadata)
+
+        print(metadata.tables)
+        self.assertIn('mid', metadata.tables)
+        self.assertNotIn('b_objs', metadata.tables['rel_a'].columns)
+        self.assertNotIn('a_objs', metadata.tables['rel_b'].columns)
+        self.assertEqual(schema_to_set(metadata.tables['mid']),
+                         {
+                             ('rel_a_id', Integer),
+                             ('rel_b_id', Integer),
+                         })
+
+    async def test_jsonb_generation(self):
+        from sqlalchemy import MetaData, Integer
+        from sqlalchemy.dialects.postgresql import JSONB
+        from pydantic import BaseModel
+        from fox_orm import OrmModel, pk, jsonb
+
+        metadata = MetaData()
+
+        class JsonbTypesHelper(BaseModel):
+            a: str
+            b: int
+
+        class JsonbTypes(OrmModel):
+            __metadata__ = metadata
+            id: Optional[int] = pk
+            dict_: dict = jsonb
+            list_: list = jsonb
+            implicit_json: JsonbTypesHelper = jsonb
+
+        self.assertEqual(JsonbTypes.__table__.metadata, metadata)
+        self.assertEqual(schema_to_set(JsonbTypes.__table__),
+                         {
+                             ('id', Integer),
+                             ('dict_', JSONB),
+                             ('list_', JSONB),
+                             ('implicit_json', JSONB),
+                         })
 
     async def test_insert(self):
         a_inst = A(text='test', n=0)
@@ -90,7 +195,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         last_id = a_inst.b_objs[-1].id
         self.assertIn(last_id, a_inst.b_objs)
         self.assertIn(a_inst.b_objs[-1], a_inst.b_objs)
-        b_inst = await B.select(and_(B.c.text2 == 'test_m2m_contains_0', B.c.n == 0))
+        b_inst = await B.select((B.c.text2 == 'test_m2m_contains_0') & (B.c.n == 0))
         self.assertIn(b_inst, a_inst.b_objs)
 
     async def test_m2m_delete(self):
@@ -118,13 +223,42 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await a_inst_2.b_objs.fetch()
         self.assertNotIn(b_inst, a_inst_2.b_objs)
 
-    async def test_bad_assignments(self):
-        a_inst = A(text='test_bad', n=0)
+    async def test_bad_operation(self):
+        a_inst = A(text='test_bad_operation', n=0)
         await a_inst.save()
         with self.assertRaises(ValueError):
             a_inst.b_objs = 1874
         with self.assertRaises(OrmException):
             a_inst.id = 1874
+        with self.assertRaises(OrmException):
+            await a_inst.fetch_related('id')
+
+    async def test_bad_model(self):
+        from fox_orm import OrmModel, pk
+
+        with self.assertRaises(OrmException):
+            class BadModel1(OrmModel):
+                pass
+        with self.assertRaises(OrmException):
+            class BadModel2(OrmModel):
+                id: Optional[int] = pk
+                kur = '123'
+        with self.assertRaises(OrmException):
+            class BadModel3(OrmModel):
+                __sqla_table__ = 'bad_model_3'
+                id: Optional[int] = pk
+        with self.assertRaises(OrmException):
+            class BadModel4(OrmModel):
+                __table__ = 'bad_model_4'
+                id: Optional[int] = pk
+        with self.assertRaises(OrmException):
+            class BadModel5(OrmModel):
+                __tablename__ = 123
+                id: Optional[int] = pk
+        with self.assertRaises(OrmException):
+            class BadModel6(OrmModel):
+                __metadata__ = 123
+                id: Optional[int] = pk
 
     async def test_select_all(self):
         for i in range(10):
@@ -256,7 +390,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_select_sqla_core(self):
         inst = A(text='test_select_sqla_core', n=0)
         await inst.save()
-        inst = await A.select(A.__sqla_table__.select().where(A.c.text == 'test_select_sqla_core'))
+        inst = await A.select(A.__table__.select().where(A.c.text == 'test_select_sqla_core'))
         self.assertIsNotNone(inst)
         self.assertEqual(inst.text, 'test_select_sqla_core')
 

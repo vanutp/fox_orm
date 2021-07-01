@@ -5,7 +5,7 @@ from pydantic.utils import smart_deepcopy
 from sqlalchemy import JSON, BigInteger
 from sqlalchemy.dialects.postgresql import JSONB
 
-from fox_orm.internal import FieldType, NonInstantiable, ColumnArgument, ColumnFlag
+from fox_orm.internal.columns import FieldType, ColumnArgument, ColumnFlag
 
 
 # noinspection PyPep8Naming
@@ -40,6 +40,5 @@ null = ColumnFlag('nullable')
 pk = ColumnFlag('primary_key')
 autoincrement = ColumnFlag('autoincrement')
 unique = ColumnFlag('unique')
-
 
 __all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique']

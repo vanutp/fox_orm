@@ -2,3 +2,5 @@
 
 aiosqlite
 pylint
+pytest
+coverage

@@ -8,11 +8,15 @@ from sqlalchemy import Column
 
 from fox_orm import default as arg_default
 from fox_orm.exceptions import OrmException
-from fox_orm.internal import PY_SQL_TYPES_MAPPING, FieldType, ColumnArgument
+from fox_orm.internal.columns import FieldType, ColumnArgument
+from fox_orm.internal.const import PY_SQL_TYPES_MAPPING
 
 
 def parse_type(type_: Type):
-    parsed = ModelField(name='', type_=type_, model_config=BaseConfig, class_validators=None)
+    class Config(BaseConfig):
+        arbitrary_types_allowed = True
+
+    parsed = ModelField(name='', type_=type_, model_config=Config, class_validators=None)
     return parsed.type_, parsed.required
 
 
@@ -46,13 +50,13 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
                 raise OrmException('More than one type specified in arguments')
             type_specified_via_arg = True
         if lenient_issubclass(arg, FieldType):
-            final_type = parsed_type.sql_type
+            final_type = arg.sql_type
         elif arg in PY_SQL_TYPES_MAPPING:
-            final_type = PY_SQL_TYPES_MAPPING[parsed_type]
+            final_type = PY_SQL_TYPES_MAPPING[arg]
 
         elif isinstance(arg, ColumnArgument):
             if arg.key in specified_args:
-                raise OrmException(f'Argument {arg.key} specified more than one time')
+                raise OrmException(f'Argument {arg.key} specified more than once')
             specified_args.add(arg.key)
 
             if isinstance(arg, arg_default):
