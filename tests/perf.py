@@ -43,8 +43,12 @@ async def main():
 
     time_start = time()
     for i in range(ITERATIONS):
-        data = await A.select_all(A.c.text == 'test2', skip_parsing=True)
+        data = await A.select_all(A.c.text == 'test2')
     print('- FoxOrm', (time() - time_start) / ITERATIONS)
+    time_start = time()
+    for i in range(ITERATIONS):
+        data = await A.select_all(A.c.text == 'test2', skip_parsing=True)
+    print('- FoxOrm skip_parsing=True', (time() - time_start) / ITERATIONS)
 
 
 asyncio.run(main())
