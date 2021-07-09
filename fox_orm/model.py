@@ -45,6 +45,11 @@ class OrmModelMeta(ModelMetaclass):
         if bases[0] == BaseModel:
             return super().__new__(mcs, name, bases, namespace, **kwargs)
 
+        inherited_columns = {}
+        for base in bases[::-1]:
+            if issubclass(base, OrmModel) and base != OrmModel:
+                inherited_columns.update({x.name: x.copy() for x in base.__table__.columns})
+
         mcs._ensure_proper_init(namespace)
 
         table_name = namespace.get('__tablename__', None) or camel_to_snake(name)
@@ -66,27 +71,26 @@ class OrmModelMeta(ModelMetaclass):
                 continue
             annotations[k] = v
 
-
-        columns = []
-        processed_columns = set()
+        columns = {}
         for column_name in new_namespace:
             if not is_valid_column(column_name):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')
             column, value = construct_column(column_name, annotations[column_name], new_namespace[column_name])
-            columns.append(column)
+            columns[column.name] = column
             new_namespace[column_name] = value
-            processed_columns.add(column_name)
         for column_name, annotation in annotations.items():
             if not is_valid_column(column_name):
                 continue
-            if column_name not in processed_columns:
-                columns.append(construct_column(column_name, annotations[column_name], tuple())[0])
-                processed_columns.add(column_name)
-        if 'id' not in processed_columns:
+            if column_name not in columns:
+                column, _ = construct_column(column_name, annotations[column_name], tuple())
+                columns[column.name] = column
+        if 'id' not in columns and 'id' not in inherited_columns:
             raise OrmException('id field is missing')
-        table = Table(table_name, metadata, *columns)
+        all_columns = list(inherited_columns.values())
+        all_columns.extend(columns.values())
+        table = Table(table_name, metadata, *all_columns)
 
         new_namespace['__table__'] = table
         new_namespace['c'] = table.c

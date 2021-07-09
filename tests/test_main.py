@@ -400,3 +400,23 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst = await A.select('''select * from a where text = :text''', {'text': 'test_select_raw_sql'})
         self.assertIsNotNone(inst)
         self.assertEqual(inst.text, 'test_select_raw_sql')
+
+    async def test_inheritance(self):
+        from sqlalchemy import MetaData, Integer
+        from fox_orm import OrmModel, pk
+
+        metadata = MetaData()
+
+        class Test(OrmModel):
+            __metadata__ = metadata
+            id: Optional[int] = pk
+
+        class TestInherited(Test):
+            test: int
+
+        proper_schema = {
+            ('id', Integer),
+            ('test', Integer),
+        }
+        self.assertEqual(TestInherited.__table__.name, 'test_inherited')
+        self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
