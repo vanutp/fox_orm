@@ -44,8 +44,7 @@ class HashList(list):
             return False
         if isinstance(item, int):
             return item in self.map
-        else:
-            return item.id in self.map
+        return item.id in self.map
 
     def __and__(self, other: 'HashList'):
         result = []
@@ -196,7 +195,8 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
         self._from = _from
         if isinstance(self._to, str):
             self._to = full_import(self._to)
-        self._via, self._this_id, self._other_id = FoxOrm.get_assoc_table(metadata, self._from, self._to, self._via_name)
+        self._via, self._this_id, self._other_id = \
+            FoxOrm.get_assoc_table(metadata, self._from, self._to, self._via_name)
 
     # pylint: disable=protected-access
     def _init_copy(self: 'ManyToMany', model: 'OrmModel') -> 'ManyToMany':
@@ -243,6 +243,7 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
 class OneToMany(Generic[MODEL], _GenericIterableRelation):
     to: Union[Type[MODEL], str]  # pylint: disable=unsubscriptable-object
     key: str
+    _from: 'Type[OrmModel]'
 
     async def _get_entry(self, other_id):
         return await FoxOrm.db.fetch_val(select([exists().where(and_(
@@ -263,7 +264,7 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
 
     def _init_copy(self: 'OneToMany', model: MODEL) -> 'OneToMany':
         res = OneToMany(to=self.to, key=self.key)
-        res._model = model
+        res._model = model  # pylint: disable=protected-access
         res._initialized = True  # pylint: disable=protected-access
         return res
 

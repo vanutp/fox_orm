@@ -23,9 +23,10 @@ def parse_type(type_: Type):
 MISSING = object()
 
 
+# pylint: disable=too-many-branches
 def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
     if not isinstance(args, tuple):
-        args = args,
+        args = (args,)
 
     final_type = None
     parsed_type, required = parse_type(annotation)

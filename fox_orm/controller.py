@@ -38,7 +38,13 @@ class _FoxOrmMeta(type):
     async def disconnect(cls):
         await cls.db.disconnect()  # pylint: disable=no-member
 
-    def get_assoc_table(cls, metadata: MetaData, a: 'Union[Type[OrmModel], str]', b: 'Union[Type[OrmModel], str]', name: str):
+    def get_assoc_table(
+            cls,
+            metadata: MetaData,
+            a: 'Union[Type[OrmModel], str]',
+            b: 'Union[Type[OrmModel], str]',
+            name: str
+    ):
         a_name = a if isinstance(a, str) else a.__table__.name
         b_name = b if isinstance(b, str) else b.__table__.name
         tables = cls._assoc_tables[metadata]
@@ -59,6 +65,8 @@ class _FoxOrmMeta(type):
         if not metadata:
             metadata = cls.metadata
         for rel, model_cls in cls._lazyinit_relations[metadata]:
+            # noinspection PyProtectedMember
+            # pylint: disable=protected-access
             rel._init(metadata, model_cls)
         cls._lazyinit_relations[metadata].clear()
 

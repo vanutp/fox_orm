@@ -9,21 +9,25 @@ from fox_orm.internal.columns import FieldType, ColumnArgument, ColumnFlag
 
 
 # noinspection PyPep8Naming
+# pylint: disable=invalid-name
 class int64(int, FieldType):
     sql_type = BigInteger
 
 
 # noinspection PyPep8Naming
+# pylint: disable=invalid-name
 class json(FieldType):
     sql_type = JSON(none_as_null=True)
 
 
 # noinspection PyPep8Naming
+# pylint: disable=invalid-name
 class jsonb(FieldType):
     sql_type = JSONB(none_as_null=True)
 
 
 # noinspection PyPep8Naming
+# pylint: disable=invalid-name
 class default(ColumnArgument):
     def __init__(self, value: Any):
         self.value = value
