@@ -412,6 +412,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             id: Optional[int] = pk
 
         class TestInherited(Test):
+            __metadata__ = metadata
             test: int
 
         proper_schema = {
@@ -420,3 +421,33 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         }
         self.assertEqual(TestInherited.__table__.name, 'test_inherited')
         self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
+
+    async def test_abstract(self):
+        from sqlalchemy import MetaData, Integer
+        from fox_orm import OrmModel, pk
+
+        metadata = MetaData()
+
+        class Test(OrmModel):
+            __metadata__ = metadata
+            __abstract__ = True
+            id: Optional[int] = pk
+
+        class TestInherited(Test):
+            __metadata__ = metadata
+            test: int
+
+        proper_schema = {
+            ('id', Integer),
+            ('test', Integer),
+        }
+        self.assertEqual(TestInherited.__table__.name, 'test_inherited')
+        self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
+
+        with self.assertRaises(OrmException):
+            Test(id=123)
+        with self.assertRaises(OrmException):
+            Test.construct({'id': 123})
+
+        TestInherited(id=123, test=456)
+        TestInherited.construct({'id': 123, 'test': 456})

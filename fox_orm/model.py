@@ -3,7 +3,7 @@ from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
-from sqlalchemy import select, func, Table, exists, MetaData
+from sqlalchemy import select, func, Table, exists, MetaData, Column
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -27,8 +27,16 @@ def is_valid_column(name):
 
 class OrmModelMeta(ModelMetaclass):
     if TYPE_CHECKING:
+        __columns__: List[Column]
         __table__: Table
         __tablename__: str
+        __metadata__: MetaData
+        __abstract__: bool
+
+    @classmethod
+    def _check_type(mcs, namespace: dict, key: str, expected_type: type):
+        if key in namespace and not isinstance(namespace[key], expected_type):
+            raise OrmException(f'{key} must be of type {expected_type.__qualname__}')
 
     @classmethod
     def _ensure_proper_init(mcs, namespace):
@@ -36,10 +44,9 @@ class OrmModelMeta(ModelMetaclass):
             raise OrmException('You are using pre 0.3 model syntax. Check the docs for new instructions')
         if '__table__' in namespace:
             raise OrmException('__table__ should not be set')
-        if '__tablename__' in namespace and not isinstance(namespace['__tablename__'], str):
-            raise OrmException('__tablename__ must be of type str')
-        if '__metadata__' in namespace and not isinstance(namespace['__metadata__'], MetaData):
-            raise OrmException('__metadata__ must be of type MetaData')
+        mcs._check_type(namespace, '__tablename__', str)
+        mcs._check_type(namespace, '__metadata__', MetaData)
+        mcs._check_type(namespace, '__abstract__', bool)
 
     def __new__(mcs, name, bases, namespace, **kwargs):
         if bases[0] == BaseModel:
@@ -48,12 +55,13 @@ class OrmModelMeta(ModelMetaclass):
         inherited_columns = {}
         for base in bases[::-1]:
             if issubclass(base, OrmModel) and base != OrmModel:
-                inherited_columns.update({x.name: x.copy() for x in base.__table__.columns})
+                inherited_columns.update({x.name: x.copy() for x in base.__columns__})
 
         mcs._ensure_proper_init(namespace)
 
         table_name = namespace.get('__tablename__', None) or camel_to_snake(name)
         metadata = namespace.get('__metadata__', None) or FoxOrm.metadata
+        abstract = namespace.get('__abstract__', None) or False
 
         new_namespace = {}
         relation_namespace = {}
@@ -90,15 +98,21 @@ class OrmModelMeta(ModelMetaclass):
             raise OrmException('id field is missing')
         all_columns = list(inherited_columns.values())
         all_columns.extend(columns.values())
-        table = Table(table_name, metadata, *all_columns)
 
-        new_namespace['__table__'] = table
-        new_namespace['c'] = table.c
+        new_namespace['__abstract__'] = abstract
+        new_namespace['__columns__'] = all_columns
+        if abstract:
+            new_namespace['__table__'] = None
+            new_namespace['c'] = None
+        else:
+            new_namespace['__table__'] = table = Table(table_name, metadata, *all_columns)
+            new_namespace['c'] = table.c
         new_namespace['__relations__'] = relation_namespace
 
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
-        for rel in relation_namespace.values():
-            FoxOrm._lazyinit_relation(metadata, rel, cls)
+        if not abstract:
+            for rel in relation_namespace.values():
+                FoxOrm._lazyinit_relation(metadata, rel, cls)
         return cls
 
 
@@ -109,8 +123,12 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     if TYPE_CHECKING:
         # cls attrs
         __private_attributes__: Dict[str, Any]
+        __columns__: List[Column]
         __table__: Table
         __relations__: dict
+        __tablename__: str
+        __metadata__: MetaData
+        __abstract__: bool
 
         # instance attrs
         __modified__: set
@@ -133,6 +151,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     # noinspection PyMissingConstructor
     def __init__(self, **data: Any) -> None:  # pylint: disable=super-init-not-called
+        if self.__abstract__:
+            raise OrmException('Can\'t instantiate abstract model')
         values, fields_set, validation_error = validate_model(self.__class__, data)
         if validation_error:
             raise validation_error  # pylint: disable=raising-bad-type
@@ -168,9 +188,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             raise ValueError('Do not set relation field')
         return super().__setattr__(name, value)
 
+    # noinspection PyMethodOverriding
+    # pylint: disable=arguments-differ
     @classmethod
-    def construct(cls, values):  # pylint: disable=arguments-differ
+    def construct(cls, values):
         m = cls.__new__(cls)
+        if m.__abstract__:
+            raise OrmException('Can\'t instantiate abstract model')
         fields_values = {name: field.get_default() for name, field in cls.__fields__.items() if
                          not field.required and field.name not in EXCLUDE_KEYS}
         fields_values.update(values)
