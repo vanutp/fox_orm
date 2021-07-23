@@ -15,7 +15,7 @@ MODEL = TypeVar('MODEL', bound='OrmModel')
 RELATION = TypeVar('RELATION', bound='_GenericIterableRelation')
 
 
-class HashList(list):
+class HashList(List[MODEL]):
     map: dict
 
     def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
@@ -23,33 +23,33 @@ class HashList(list):
         if items is not None:
             super().__init__(items)
             for i, x in enumerate(items):
-                self.map[x.id] = i
+                self.map[x.pkey_value] = i
         else:
             super().__init__()
 
     def add(self, other: MODEL):
-        if other.id in self.map:
+        if other.pkey_value in self.map:
             return
         self.append(other)
-        self.map[other.id] = len(self) - 1
+        self.map[other.pkey_value] = len(self) - 1
 
     def delete(self, other: MODEL):
-        if other.id not in self.map:
+        if other.pkey_value not in self.map:
             return
-        del self[self.map[other.id]]
-        del self.map[other.id]
+        del self[self.map[other.pkey_value]]
+        del self.map[other.pkey_value]
 
     def __contains__(self, item: Optional[Union[MODEL, int]]):  # pylint: disable=unsubscriptable-object
         if item is None:
             return False
         if isinstance(item, int):
             return item in self.map
-        return item.id in self.map
+        return item.pkey_value in self.map
 
     def __and__(self, other: 'HashList'):
         result = []
         for x in other:
-            if x.id in self.map:
+            if x.pkey_value in self.map:
                 result.append(x)
         return result
 
@@ -58,7 +58,7 @@ class HashList(list):
         for x in other:
             result.append(x)
         for x in self:
-            if x.id not in other.map:
+            if x.pkey_value not in other.map:
                 result.append(x)
         return result
 
@@ -120,7 +120,7 @@ class _GenericIterableRelation(ABC):
         if not isinstance(other, self.objects_type):
             raise OrmException('other is not instance of target model')
         self._objects.add(other)
-        self.__modified__[other.id] = True
+        self.__modified__[other.pkey_value] = True
         return OptionalAwaitable(self.save)
 
     def delete(self, other: MODEL):
@@ -129,7 +129,7 @@ class _GenericIterableRelation(ABC):
         if not isinstance(other, self.objects_type):
             raise OrmException('other is not instance of target model')
         self._objects.delete(other)
-        self.__modified__[other.id] = False
+        self.__modified__[other.pkey_value] = False
         return OptionalAwaitable(self.save)
 
     def __contains__(self, item: Union[MODEL, int]) -> bool:  # pylint: disable=unsubscriptable-object
@@ -181,7 +181,7 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
 
     async def _get_entry(self, other_id):
         return await FoxOrm.db.fetch_val(select([exists().where(and_(
-            getattr(self._via.c, self._this_id) == self._model.id,
+            getattr(self._via.c, self._this_id) == self._model.pkey_value,
             getattr(self._via.c, self._other_id) == other_id
         ))]))
 
@@ -217,7 +217,7 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
     async def fetch_ids(self) -> List[int]:
         self._raise_if_not_initialized()
         return [x[self._other_id] for x in await FoxOrm.db.fetch_all(self._via.select().where(
-            getattr(self._via.c, self._this_id) == self._model.id
+            getattr(self._via.c, self._this_id) == self._model.pkey_value
         ))]
 
     async def save(self) -> None:
@@ -228,12 +228,12 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
             entry_exists = await self._get_entry(k)
             if v and not entry_exists:
                 queries.append(FoxOrm.db.execute(self._via.insert(), {
-                    self._this_id: self._model.id,
+                    self._this_id: self._model.pkey_value,
                     self._other_id: k
                 }))
             elif not v and entry_exists:
                 queries.append(FoxOrm.db.execute(self._via.delete().where(and_(
-                    getattr(self._via.c, self._this_id) == self._model.id,
+                    getattr(self._via.c, self._this_id) == self._model.pkey_value,
                     getattr(self._via.c, self._other_id) == k
                 ))))
         await asyncio.gather(*queries)
@@ -247,8 +247,8 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
 
     async def _get_entry(self, other_id):
         return await FoxOrm.db.fetch_val(select([exists().where(and_(
-            getattr(self.to.c, self.key) == self._model.id,
-            self.to.c.id == other_id
+            getattr(self.to.c, self.key) == self._model.pkey_value,
+            self.to.pkey_column == other_id
         ))]))
 
     # pylint: disable=unsubscriptable-object
@@ -274,8 +274,8 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
         return self.to
 
     async def fetch_ids(self) -> List[int]:
-        return [x['id'] for x in await FoxOrm.db.fetch_all(select([self.to.c.id]).where(
-            getattr(self.to.c, self.key) == self._model.id
+        return [x[self.to.__pkey_name__] for x in await FoxOrm.db.fetch_all(select([self.to.pkey_column]).where(
+            getattr(self.to.c, self.key) == self._model.pkey_value
         ))]
 
     async def save(self) -> None:
@@ -285,13 +285,13 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
             entry_exists = await self._get_entry(k)
             if v and not entry_exists:
                 queries.append(FoxOrm.db.execute(self.to.__table__.update().where(
-                    self.to.c.id == k
+                    self.to.pkey_column == k
                 ), {
-                    self.key: self._model.id
+                    self.key: self._model.pkey_value
                 }))
             elif not v and entry_exists:
                 queries.append(FoxOrm.db.execute(self.to.__table__.update().where(
-                    self.to.c.id == k
+                    self.to.pkey_column == k
                 ), {
                     self.key: None
                 }))

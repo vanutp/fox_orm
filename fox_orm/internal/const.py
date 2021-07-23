@@ -3,7 +3,7 @@ from datetime import datetime, date, time, timedelta
 from pydantic import BaseModel
 from sqlalchemy import Integer, String, JSON, Boolean, DateTime, Date, Time, Float, Interval
 
-EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__'}
+EXCLUDE_KEYS = {'__modified__', '__bound__', '__exclude__', 'pkey_value'}
 
 json_fix_none = JSON(none_as_null=True)
 

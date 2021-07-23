@@ -16,7 +16,7 @@ class RecursiveTest(BaseModel):
 
 
 class A(OrmModel):
-    id: Optional[int] = pk
+    pkey: Optional[int] = pk
     text: str
     n: int
     recursive: Optional[RecursiveTest]
@@ -25,7 +25,7 @@ class A(OrmModel):
 
 
 class B(OrmModel):
-    id: Optional[int] = pk
+    pkey: Optional[int] = pk
     text2: str
     n: int
 
@@ -34,13 +34,13 @@ class B(OrmModel):
 
 
 class C(OrmModel):
-    id: Optional[int] = pk
+    pkey: Optional[int] = pk
     b_id: Optional[int]
     d_id: Optional[int]
 
 
 class D(OrmModel):
-    id: Optional[int] = pk
+    pkey: Optional[int] = pk
     c_objs: OneToMany['C'] = OneToMany(to='tests.models.C', key='d_id')
 
 
@@ -48,7 +48,8 @@ class ExtraFields(OrmModel):
     class Config:
         extra = Extra.allow
 
-    id: Optional[int] = pk
+    pkey: Optional[int] = pk
     _test: str
+
 
 FoxOrm.init_relations()

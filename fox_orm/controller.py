@@ -52,8 +52,8 @@ class _FoxOrmMeta(type):
             table = tables[name]
         else:
             table = Table(name, metadata,
-                          Column(f'{a_name}_id', Integer, ForeignKey(f'{a_name}.id'), primary_key=True),
-                          Column(f'{b_name}_id', Integer, ForeignKey(f'{b_name}.id'), primary_key=True)
+                          Column(f'{a_name}_id', Integer, ForeignKey(f'{a_name}.{a.__pkey_name__}'), primary_key=True),
+                          Column(f'{b_name}_id', Integer, ForeignKey(f'{b_name}.{a.__pkey_name__}'), primary_key=True)
                           )
             tables[name] = table
         return table, f'{a_name}_id', f'{b_name}_id'

@@ -33,7 +33,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             b: int
 
         class AllTypes(OrmModel):
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
             int_: int
             float_: float
             str_: str
@@ -49,7 +49,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             implicit_json: AllTypesHelper
 
         all_types_proper_schema = {
-            ('id', Integer),
+            ('pkey', Integer),
             ('int_', Integer),
             ('float_', Float),
             ('str_', String),
@@ -75,12 +75,12 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         class RelA(OrmModel):
             __metadata__ = metadata
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
             b_objs: ManyToMany['B'] = ManyToMany(to='placeholder', via='mid')
 
         class RelB(OrmModel):
             __metadata__ = metadata
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
             a_objs: ManyToMany['A'] = ManyToMany(to=RelA, via='mid')
 
         RelA.__relations__['b_objs']._to = RelB
@@ -111,7 +111,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         class JsonbTypes(OrmModel):
             __metadata__ = metadata
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
             dict_: dict = jsonb
             list_: list = jsonb
             implicit_json: JsonbTypesHelper = jsonb
@@ -119,7 +119,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(JsonbTypes.__table__.metadata, metadata)
         self.assertEqual(schema_to_set(JsonbTypes.__table__),
                          {
-                             ('id', Integer),
+                             ('pkey', Integer),
                              ('dict_', JSONB),
                              ('list_', JSONB),
                              ('implicit_json', JSONB),
@@ -128,10 +128,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_insert(self):
         a_inst = A(text='test', n=0)
         await a_inst.save()
-        self.assertIsNotNone(a_inst.id)
+        self.assertIsNotNone(a_inst.pkey)
         b_inst = B(text2='test2', n=0)
         await b_inst.save()
-        self.assertIsNotNone(b_inst.id)
+        self.assertIsNotNone(b_inst.pkey)
 
     async def test_select(self):
         inst = A(text='test_select', n=0)
@@ -192,7 +192,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             await b_inst.save()
             a_inst.b_objs.add(b_inst)
             a_inst.b_objs.add(b_inst)
-        last_id = a_inst.b_objs[-1].id
+        last_id = a_inst.b_objs[-1].pkey
         self.assertIn(last_id, a_inst.b_objs)
         self.assertIn(a_inst.b_objs[-1], a_inst.b_objs)
         b_inst = await B.select((B.c.text2 == 'test_m2m_contains_0') & (B.c.n == 0))
@@ -229,9 +229,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             a_inst.b_objs = 1874
         with self.assertRaises(OrmException):
-            a_inst.id = 1874
+            a_inst.pkey = 1874
         with self.assertRaises(OrmException):
-            await a_inst.fetch_related('id')
+            await a_inst.fetch_related('pkey')
 
     async def test_bad_model(self):
         from fox_orm import OrmModel, pk
@@ -241,24 +241,31 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
                 pass
         with self.assertRaises(OrmException):
             class BadModel2(OrmModel):
-                id: Optional[int] = pk
+                pkey: Optional[int] = pk
                 kur = '123'
         with self.assertRaises(OrmException):
             class BadModel3(OrmModel):
                 __sqla_table__ = 'bad_model_3'
-                id: Optional[int] = pk
+                pkey: Optional[int] = pk
         with self.assertRaises(OrmException):
             class BadModel4(OrmModel):
                 __table__ = 'bad_model_4'
-                id: Optional[int] = pk
+                pkey: Optional[int] = pk
         with self.assertRaises(OrmException):
             class BadModel5(OrmModel):
                 __tablename__ = 123
-                id: Optional[int] = pk
+                pkey: Optional[int] = pk
         with self.assertRaises(OrmException):
             class BadModel6(OrmModel):
                 __metadata__ = 123
-                id: Optional[int] = pk
+                pkey: Optional[int] = pk
+        with self.assertRaises(OrmException):
+            class BadModel7(OrmModel):
+                pkey: Optional[int] = pk
+                id2: Optional[int] = pk
+        with self.assertRaises(OrmException) as exc:
+            class BadModel8(OrmModel):
+                pass
 
     async def test_select_all(self):
         for i in range(10):
@@ -326,7 +333,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await c_inst.save()
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 0)
-        c_inst.b_id = b_inst.id
+        c_inst.b_id = b_inst.pkey
         await c_inst.save()
         self.assertEqual(len(b_inst.c_objs), 0)
         await b_inst.c_objs.fetch()
@@ -334,9 +341,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         c_inst_2 = C()
         await c_inst_2.save()
         await b_inst.c_objs.add(c_inst_2)
-        c_inst_2 = await C.get(c_inst_2.id)
-        self.assertEqual(c_inst_2.b_id, b_inst.id)
-        b_inst = await B.get(b_inst.id)
+        c_inst_2 = await C.get(c_inst_2.pkey)
+        self.assertEqual(c_inst_2.b_id, b_inst.pkey)
+        b_inst = await B.get(b_inst.pkey)
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 2)
 
@@ -346,14 +353,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         d_inst = D()
         await d_inst.save()
         c_inst_1 = C()
-        c_inst_1.d_id = d_inst.id
-        c_inst_1.b_id = b_inst.id
+        c_inst_1.d_id = d_inst.pkey
+        c_inst_1.b_id = b_inst.pkey
         await c_inst_1.save()
         c_inst_2 = C()
-        c_inst_2.d_id = d_inst.id
+        c_inst_2.d_id = d_inst.pkey
         await c_inst_2.save()
         c_inst_3 = C()
-        c_inst_3.b_id = b_inst.id
+        c_inst_3.b_id = b_inst.pkey
         await c_inst_3.save()
         await b_inst.c_objs.fetch()
         await d_inst.c_objs.fetch()
@@ -362,16 +369,16 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(b_inst.c_objs | d_inst.c_objs), 3)
         self.assertEqual(len(b_inst.c_objs & d_inst.c_objs), 1)
         both_have = (b_inst.c_objs & d_inst.c_objs)[0]
-        self.assertEqual(both_have.id, c_inst_1.id)
+        self.assertEqual(both_have.pkey, c_inst_1.pkey)
 
     async def test_custom_id(self):
-        inst = A(id=1874, text='test_custom_id', n=1)
+        inst = A(pkey=1874, text='test_custom_id', n=1)
         await inst.save()
-        self.assertEqual(inst.id, 1874)
+        self.assertEqual(inst.pkey, 1874)
         await A.get(1874)
 
         inst_2 = A(text='test_custom_id', n=2)
-        inst_2.id = 1875
+        inst_2.pkey = 1875
         await inst_2.save()
         await A.get(1875)
 
@@ -385,7 +392,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst = ExtraFields()
         inst._test = 123
         await inst.save()
-        inst = await ExtraFields.get(inst.id)
+        inst = await ExtraFields.get(inst.pkey)
 
     async def test_select_sqla_core(self):
         inst = A(text='test_select_sqla_core', n=0)
@@ -409,14 +416,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         class Test(OrmModel):
             __metadata__ = metadata
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
 
         class TestInherited(Test):
             __metadata__ = metadata
             test: int
 
         proper_schema = {
-            ('id', Integer),
+            ('pkey', Integer),
             ('test', Integer),
         }
         self.assertEqual(TestInherited.__table__.name, 'test_inherited')
@@ -431,23 +438,23 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         class Test(OrmModel):
             __metadata__ = metadata
             __abstract__ = True
-            id: Optional[int] = pk
+            pkey: Optional[int] = pk
 
         class TestInherited(Test):
             __metadata__ = metadata
             test: int
 
         proper_schema = {
-            ('id', Integer),
+            ('pkey', Integer),
             ('test', Integer),
         }
         self.assertEqual(TestInherited.__table__.name, 'test_inherited')
         self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
 
         with self.assertRaises(OrmException):
-            Test(id=123)
+            Test(pkey=123)
         with self.assertRaises(OrmException):
-            Test.construct({'id': 123})
+            Test.construct({'pkey': 123})
 
-        TestInherited(id=123, test=456)
-        TestInherited.construct({'id': 123, 'test': 456})
+        TestInherited(pkey=123, test=456)
+        TestInherited.construct({'pkey': 123, 'test': 456})

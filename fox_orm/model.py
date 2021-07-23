@@ -32,6 +32,11 @@ class OrmModelMeta(ModelMetaclass):
         __tablename__: str
         __metadata__: MetaData
         __abstract__: bool
+        __pkey_name__: str
+
+    @property
+    def pkey_column(cls):
+        return getattr(cls.__table__.c, cls.__pkey_name__)
 
     @classmethod
     def _check_type(mcs, namespace: dict, key: str, expected_type: type):
@@ -94,17 +99,19 @@ class OrmModelMeta(ModelMetaclass):
             if column_name not in columns:
                 column, _ = construct_column(column_name, annotations[column_name], tuple())
                 columns[column.name] = column
-        if 'id' not in columns and 'id' not in inherited_columns:
-            raise OrmException('id field is missing')
         all_columns = list(inherited_columns.values())
         all_columns.extend(columns.values())
 
         new_namespace['__abstract__'] = abstract
         new_namespace['__columns__'] = all_columns
         if abstract:
+            new_namespace['__pkey_name__'] = None
             new_namespace['__table__'] = None
             new_namespace['c'] = None
         else:
+            if sum([x.primary_key for x in all_columns]) != 1:
+                raise OrmException('Model should have exactly one primary key')
+            new_namespace['__pkey_name__'] = [x.name for x in all_columns if x.primary_key][0]
             new_namespace['__table__'] = table = Table(table_name, metadata, *all_columns)
             new_namespace['c'] = table.c
         new_namespace['__relations__'] = relation_namespace
@@ -129,6 +136,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         __tablename__: str
         __metadata__: MetaData
         __abstract__: bool
+        __pkey_name__: str
 
         # instance attrs
         __modified__: set
@@ -175,8 +183,20 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             exclude |= exclude_private
         return super()._iter(to_dict, by_alias, include, exclude, exclude_unset, exclude_defaults, exclude_none)
 
+    @property
+    def pkey_column(self):
+        return getattr(self.__class__.__table__.c, self.__pkey_name__)
+
+    @property
+    def pkey_value(self):
+        return getattr(self, self.__pkey_name__)
+
+    @pkey_value.setter
+    def pkey_value(self, value):
+        setattr(self, self.__pkey_name__, value)
+
     def __setattr__(self, name, value):
-        if name == 'id':
+        if name == self.__pkey_name__:
             if self.__bound__:
                 raise OrmException('Can not modify id')
             return super().__setattr__(name, value)
@@ -209,28 +229,32 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     def ensure_id(self):
         if not self.__bound__:
             raise OrmException('Object is not bound to db, execute insert first')
-        if getattr(self, 'id', None) is None:
-            raise WTFException('id not set')
+        if getattr(self, self.__pkey_name__, None) is None:
+            raise WTFException('Primary key not set')
 
     # pylint: disable=access-member-before-definition
     async def save(self):
+        table = self.__table__
+        pkey_name = self.__pkey_name__
         if self.__bound__:
             self.ensure_id()
             if not self.__modified__:
                 return
-            table = self.__class__.__table__
             fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
-            await FoxOrm.db.execute(table.update().where(table.c.id == self.id), fields)
+            await FoxOrm.db.execute(
+                table.update().where(self.pkey_column == self.pkey_value),
+                fields
+            )
             self.__modified__.clear()
         else:
-            table = self.__class__.__table__
-            data = self.dict(exclude={'id'}, include=self.__fields__.keys())
+            data = self.dict(exclude={pkey_name}, include=self.__fields__.keys())
             if len(data) == 0:
-                data['id'] = None
-            if self.id is not None:
-                data['id'] = self.id
-            self.id = await FoxOrm.db.execute(table.insert(), data)  # pylint: disable=attribute-defined-outside-init
+                data[pkey_name] = None
+            if self.pkey_value is not None:
+                data[pkey_name] = self.pkey_value
+            # pylint: disable=attribute-defined-outside-init
+            self.pkey_value = await FoxOrm.db.execute(table.insert(), data)
             self.__bound__ = True
 
     @classmethod
@@ -289,8 +313,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     async def _delete_inst(self):
         self.ensure_id()
-        table = self.__class__.__table__
-        query = table.delete().where(table.c.id == self.id)
+        table = self.__table__
+        query = table.delete().where(self.pkey_column == self.pkey_value)
         self.__bound__ = False
         await FoxOrm.db.execute(query)
 
@@ -311,7 +335,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
-        return await cls.select(cls.__table__.c.id == obj_id, skip_parsing=skip_parsing)
+        return await cls.select(cls.pkey_column == obj_id, skip_parsing=skip_parsing)
 
     async def fetch_related(self, *fields: str) -> None:
         self.ensure_id()
