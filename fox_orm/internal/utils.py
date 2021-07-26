@@ -1,9 +1,10 @@
 import importlib
 import re
-from typing import Type, Tuple, Optional, TYPE_CHECKING
+from typing import Type, Tuple, Optional, TYPE_CHECKING, Any
 
 from pydantic import ValidationError, Extra, ConfigError, ExtraError, MissingError
 from pydantic.error_wrappers import ErrorWrapper
+from pydantic.main import UNTOUCHED_TYPES
 from pydantic.typing import ForwardRef
 from pydantic.utils import ROOT_KEY, GetterDict
 
@@ -60,7 +61,7 @@ def validate_model(
             return {}, set(), ValidationError([ErrorWrapper(exc, loc=ROOT_KEY)], cls_)
 
     for name, field in model.__fields__.items():
-        if name in EXCLUDE_KEYS and name != 'id':
+        if name in EXCLUDE_KEYS and name != model.__pkey_name__:
             values[name] = field.default
             continue
         if field.type_.__class__ == ForwardRef:
@@ -149,3 +150,11 @@ def camel_to_snake(name):
 class NonInstantiable:
     def __new__(cls, *args, **kwargs):
         raise TypeError(f'Object of type {cls.__qualname__} is not instantiable')
+
+
+def is_valid_column(name: str) -> bool:
+    return not (name.startswith('_') or name == 'Config')
+
+
+def is_untouched(v: Any) -> bool:
+    return isinstance(v, UNTOUCHED_TYPES) or v.__class__.__name__ == 'cython_function_or_method'

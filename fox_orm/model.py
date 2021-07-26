@@ -2,7 +2,7 @@ import asyncio
 from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
 
 from pydantic import BaseModel
-from pydantic.main import ModelMetaclass
+from pydantic.main import ModelMetaclass, UNTOUCHED_TYPES
 from sqlalchemy import select, func, Table, exists, MetaData, Column
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.elements import ColumnElement
@@ -11,7 +11,8 @@ from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
 from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
-from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
+from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model, is_untouched, \
+    is_valid_column
 from fox_orm.relations import _GenericIterableRelation
 
 if TYPE_CHECKING:
@@ -19,10 +20,6 @@ if TYPE_CHECKING:
     from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
 
 MODEL = TypeVar('MODEL', bound='OrmModel')
-
-
-def is_valid_column(name):
-    return not (name.startswith('_') or name == 'Config')
 
 
 class OrmModelMeta(ModelMetaclass):
@@ -85,8 +82,8 @@ class OrmModelMeta(ModelMetaclass):
             annotations[k] = v
 
         columns = {}
-        for column_name in new_namespace:
-            if not is_valid_column(column_name):
+        for column_name, namespace_value in new_namespace.items():
+            if not is_valid_column(column_name) or is_untouched(namespace_value):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')
@@ -94,7 +91,7 @@ class OrmModelMeta(ModelMetaclass):
             columns[column.name] = column
             new_namespace[column_name] = value
         for column_name, annotation in annotations.items():
-            if not is_valid_column(column_name):
+            if not is_valid_column(column_name) or is_untouched(namespace_value):
                 continue
             if column_name not in columns:
                 column, _ = construct_column(column_name, annotations[column_name], tuple())

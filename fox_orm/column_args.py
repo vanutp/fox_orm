@@ -1,7 +1,7 @@
-from types import FunctionType
+import json as json_mod
 from typing import Any
 
-from pydantic.utils import smart_deepcopy
+from pydantic import BaseModel
 from sqlalchemy import JSON, BigInteger
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -29,15 +29,20 @@ class jsonb(FieldType):
 # noinspection PyPep8Naming
 # pylint: disable=invalid-name
 class default(ColumnArgument):
+    key = 'server_default'
+
     def __init__(self, value: Any):
         self.value = value
 
     def should_set_server_default(self):
-        return not isinstance(self.value, FunctionType)
+        return isinstance(self.value, (int, str, bool, dict, list, BaseModel)) or self.value is None
 
     def apply(self, kwargs):
         if self.should_set_server_default():
-            kwargs['server_default'] = smart_deepcopy(self.value)
+            if isinstance(self.value, BaseModel):
+                kwargs['server_default'] = self.value.json()
+            else:
+                kwargs['server_default'] = json_mod.dumps(self.value)
 
 
 null = ColumnFlag('nullable')
