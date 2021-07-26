@@ -14,9 +14,8 @@ class ColumnArgument(ABC):
     def apply(self, kwargs):
         kwargs[self.key] = self.get_value()
 
-    @abstractmethod
     def get_value(self) -> Any:
-        ...
+        raise NotImplementedError
 
 
 class ColumnFlag(ColumnArgument):
