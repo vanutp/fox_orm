@@ -5,7 +5,7 @@ from typing import Union, Type, TypeVar, Iterator, Optional, List, Generic, TYPE
 from sqlalchemy import and_, select, Table, exists, MetaData
 
 from fox_orm import FoxOrm
-from fox_orm.exceptions import WTFException, NotFetchedException, OrmException
+from fox_orm.exceptions import NotFetchedException, OrmException
 from fox_orm.internal.utils import full_import, OptionalAwaitable
 
 if TYPE_CHECKING:
@@ -106,8 +106,7 @@ class _GenericIterableRelation(ABC):
         self._fetched = True
 
     def _raise_if_not_initialized(self):
-        if not self._initialized:
-            raise WTFException('Relation not initialized')
+        assert self._initialized
 
     def _raise_if_not_fetched(self):
         self._raise_if_not_initialized()

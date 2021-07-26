@@ -8,7 +8,7 @@ from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
-from fox_orm.exceptions import OrmException, WTFException
+from fox_orm.exceptions import OrmException
 from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
 from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
@@ -229,8 +229,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     def ensure_id(self):
         if not self.__bound__:
             raise OrmException('Object is not bound to db, execute insert first')
-        if getattr(self, self.__pkey_name__, None) is None:
-            raise WTFException('Primary key not set')
+        assert getattr(self, self.__pkey_name__, None) is not None
 
     # pylint: disable=access-member-before-definition
     async def save(self):
