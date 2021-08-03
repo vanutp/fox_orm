@@ -2,8 +2,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Extra
 
-from fox_orm import pk, FoxOrm
-from fox_orm.model import OrmModel
+from fox_orm import FoxOrm, OrmModel
+from fox_orm.fields import pk
 from fox_orm.relations import ManyToMany, OneToMany
 
 

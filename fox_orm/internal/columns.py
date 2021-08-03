@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Type, Any
 
 from fox_orm.internal.utils import NonInstantiable

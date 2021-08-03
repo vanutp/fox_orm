@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
+from fox_orm.internal.columns import FieldType
 from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
 from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model, is_untouched, \
@@ -83,7 +84,8 @@ class OrmModelMeta(ModelMetaclass):
 
         columns = {}
         for column_name, namespace_value in new_namespace.items():
-            if not is_valid_column(column_name) or is_untouched(namespace_value):
+            if not is_valid_column(column_name) or \
+                    (is_untouched(namespace_value) and not issubclass(namespace_value, FieldType)):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')

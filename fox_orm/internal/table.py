@@ -6,7 +6,7 @@ from pydantic.fields import ModelField, FieldInfo, Field
 from pydantic.utils import lenient_issubclass
 from sqlalchemy import Column
 
-from fox_orm import default as arg_default
+from fox_orm.fields import default as arg_default
 from fox_orm.exceptions import OrmException
 from fox_orm.internal.columns import FieldType, ColumnArgument
 from fox_orm.internal.const import PY_SQL_TYPES_MAPPING

@@ -26,7 +26,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         from datetime import datetime, date, time, timedelta
         from pydantic import BaseModel
         from sqlalchemy import Integer, Float, String, Boolean, DateTime, Date, Time, Interval, JSON
-        from fox_orm import OrmModel, pk
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk
 
         class AllTypesHelper(BaseModel):
             a: str
@@ -69,7 +70,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_relationship_generation(self):
         from sqlalchemy import MetaData, Integer
-        from fox_orm import OrmModel, pk, ManyToMany
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk
+        from fox_orm.relations import ManyToMany
 
         metadata = MetaData()
 
@@ -101,7 +104,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         from sqlalchemy import MetaData, Integer
         from sqlalchemy.dialects.postgresql import JSONB
         from pydantic import BaseModel
-        from fox_orm import OrmModel, pk, jsonb
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk, jsonb
 
         metadata = MetaData()
 
@@ -234,7 +238,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             await a_inst.fetch_related('pkey')
 
     async def test_bad_model(self):
-        from fox_orm import OrmModel, pk
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk
 
         with self.assertRaises(OrmException):
             class BadModel1(OrmModel):
@@ -410,7 +415,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_inheritance(self):
         from sqlalchemy import MetaData, Integer
-        from fox_orm import OrmModel, pk
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk
 
         metadata = MetaData()
 
@@ -431,7 +437,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_abstract(self):
         from sqlalchemy import MetaData, Integer
-        from fox_orm import OrmModel, pk
+        from fox_orm import OrmModel
+        from fox_orm.fields import pk
 
         metadata = MetaData()
 
