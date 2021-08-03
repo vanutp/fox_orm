@@ -12,6 +12,7 @@ markdown_extensions:
     base_path: docs
 - pymdownx.highlight
 - pymdownx.superfences
+- def_list
 nav:
 - Fox Orm: index.md
 - Getting Started:

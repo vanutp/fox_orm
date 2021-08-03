@@ -1,19 +1,22 @@
 # Row types
 
 You can specify row type
+
 - using type annotations
-  
-  Example:
-  ```python
-  {!../src/usage/02_1_annotations.py}
-  ```
-- using flags 
-  This is useful if for some reason you want to specify different types
+: Example:
+
+```python
+{!../src/usage/02_1_annotations.py!}
+```
+
+- using flags
+: This is useful if for some reason you want to specify different types
   for Pydantic model and ORM. In this example it's used to use JSONB
-  with Python dict type, which is by default mapped to JSON SQL type, 
-  ```python
-  {!../src/usage/02_2_flags.py}
-  ```
+  with Python dict type, which is by default mapped to JSON SQL type.
+
+```python
+{!../src/usage/02_2_flags.py!}
+```
 
 Types specified using flags have higher priority and override types specified
 in annotations.
