@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 
-from models import metadata
+from fox_orm import FoxOrm
 
 engine = create_engine(DB_URI)
-metadata.create_all(engine)
+FoxOrm.metadata.create_all(engine)

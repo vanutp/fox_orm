@@ -15,12 +15,14 @@ markdown_extensions:
 nav:
 - Fox Orm: index.md
 - Getting Started:
-  - getting_started/installation.md
-  - getting_started/models.md
-  - getting_started/generating_tables.md
-  - getting_started/init_and_connect.md
+  - getting_started/01_installation.md
+  - getting_started/02_models.md
+  - getting_started/03_generating_tables.md
+  - getting_started/04_init_and_connect.md
+  - getting_started/05_complete_example.md
 - Usage:
-  - usage/basic_operations.md
+  - usage/01_basic_operations.md
+  - usage/02_row_types.md
   - Many to many:
     - Definition: usage/many_to_many/definition.md
     - Usage: usage/many_to_many/usage.md

@@ -4,23 +4,24 @@
 
 You need to declare two models, between which you want a relation:
 
-```python hl_lines="10-18 26-30 36-40"
-{!../src/usage/many_to_many.py!}
-```
-
-## Association table
-Then you need to declare an association table:
-```python hl_lines="20-23"
+```python hl_lines="8-10 15-17"
 {!../src/usage/many_to_many.py!}
 ```
 
 ## Relation field
-Finally, you need to define relation field on each Fox ORM's model:
-```python hl_lines="32-33 42-43"
+Then you need to define relation field on each Fox ORM model:
+```python hl_lines="12 19"
 {!../src/usage/many_to_many.py!}
 ```
 
 * `to` parameter can be either string with full path to model or model class
-* `via` parameter should be relation table
-* `this_id` is column with id of objects in this table
-* `other_id` is column with id of objects in other table
+* `via` parameter should be name of the relation table
+
+## init_relations
+
+If you use relations in file, you should place `FoxOrm.init_relations()` at the end of
+your file
+
+```python hl_lines="22"
+{!../src/usage/many_to_many.py!}
+```

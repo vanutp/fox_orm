@@ -2,13 +2,11 @@
 
 ## Create and insert
 
-To create a user just create an instance of model (without filling id field), as you would in pydantic
-
-Then execute `await instance.save()`. If the row is already in the table, it will be updated. Otherwise, it will be
-inserted
+To create a user just create an instance of model (optionally filling id field),
+as you would in pydantic. Then execute `await instance.save()`.
 
 ```python
-user = User(first_name='Test', username='test')
+user = User(first_name='vanutp', username='fox')
 await user.save()
 ```
 
@@ -16,11 +14,13 @@ await user.save()
 
 To select rows from a table, you can use `Model.select`
 
-First argument of `Model.select` should be SQLAlchemy's expression
+First argument of `Model.select` should be SQLAlchemy core expression
 
-You can also optionally specify `order_by` (in SQLAlchemy format, for example `order_by=User.c.birthday`)
+You can also optionally specify `order_by`
+(in SQLAlchemy format, for example `order_by=User.c.birthday`)
 
-Afterwards, you can change instance's fields and execute `await instance.save()` to save changes
+Afterwards, you can change instance's fields and execute `await instance.save()`
+to save changes
 
 ```python
 user = await User.select(User.c.username == 'test')
@@ -31,7 +31,8 @@ await user.save()
 ### Mutable fields
 
 Due to python limitations, you need to call `instance.flag_modified('field_name')`
-after modifying fields, which values are mutable objects in Python (for example JSON/JSONB)
+after modifying fields, which values are mutable objects in Python
+(for example JSON/JSONB)
 
 ```python
 user.data['additional_field'] = 'value'
@@ -48,7 +49,7 @@ await user.save()
 
 ### Get
 
-`Model.get(obj_id)` is a shorthand for `Model.select(Model.c.id == obj_id)`
+`Model.get(obj_id)` is a shorthand for `Model.select(Model.c.<primary key> == obj_id)`
 
 For example:
 
