@@ -23,6 +23,9 @@ class A(OrmModel):
 
     b_objs: ManyToMany['B'] = ManyToMany(to='tests.models.B', via='mid')
 
+    async def extra_function(self):
+        pass
+
 
 class B(OrmModel):
     pkey: Optional[int] = pk

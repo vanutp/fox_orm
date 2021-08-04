@@ -150,11 +150,3 @@ def camel_to_snake(name):
 class NonInstantiable:
     def __new__(cls, *args, **kwargs):
         raise TypeError(f'Object of type {cls.__qualname__} is not instantiable')
-
-
-def is_valid_column(name: str) -> bool:
-    return not (name.startswith('_') or name == 'Config')
-
-
-def is_untouched(v: Any) -> bool:
-    return isinstance(v, UNTOUCHED_TYPES) or v.__class__.__name__ == 'cython_function_or_method'

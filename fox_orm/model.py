@@ -9,11 +9,9 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
-from fox_orm.internal.columns import FieldType
 from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
-from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model, is_untouched, \
-    is_valid_column
+from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
 from fox_orm.relations import _GenericIterableRelation
 
 if TYPE_CHECKING:
@@ -21,6 +19,18 @@ if TYPE_CHECKING:
     from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
 
 MODEL = TypeVar('MODEL', bound='OrmModel')
+
+
+def is_valid_column_name(name: str) -> bool:
+    return not (name.startswith('_') or name == 'Config')
+
+
+def is_valid_column_value(v: Any) -> bool:
+    from fox_orm.internal.columns import FieldType
+
+    is_untouched = isinstance(v, UNTOUCHED_TYPES) or v.__class__.__name__ == 'cython_function_or_method'
+    is_field_type = isinstance(v, type) and issubclass(v, FieldType)
+    return not is_untouched or is_field_type
 
 
 class OrmModelMeta(ModelMetaclass):
@@ -84,8 +94,7 @@ class OrmModelMeta(ModelMetaclass):
 
         columns = {}
         for column_name, namespace_value in new_namespace.items():
-            if not is_valid_column(column_name) or \
-                    (is_untouched(namespace_value) and not issubclass(namespace_value, FieldType)):
+            if not is_valid_column_name(column_name) or not is_valid_column_value(namespace_value):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')
@@ -93,7 +102,7 @@ class OrmModelMeta(ModelMetaclass):
             columns[column.name] = column
             new_namespace[column_name] = value
         for column_name, annotation in annotations.items():
-            if not is_valid_column(column_name) or is_untouched(namespace_value):
+            if not is_valid_column_name(column_name):
                 continue
             if column_name not in columns:
                 column, _ = construct_column(column_name, annotations[column_name], tuple())
