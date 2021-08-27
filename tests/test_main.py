@@ -180,11 +180,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             b_inst = B(text2='test_m2m_2_' + str(i), n=0)
             await b_inst.save()
             a_inst.b_objs.add(b_inst)
+        self.assertEqual(await a_inst.b_objs.count(), 0)
         await a_inst.b_objs.save()
         with self.assertRaises(NotFetchedException):
             self.assertEqual(len(a_inst.b_objs), 10)
+        self.assertEqual(await a_inst.b_objs.count(), 10)
         await a_inst.b_objs.fetch()
         self.assertEqual(len(a_inst.b_objs), 10)
+        self.assertEqual(await a_inst.b_objs.count(), 10)
 
     async def test_m2m_contains(self):
         a_inst = A(text='test_m2m_contains', n=0)
@@ -331,15 +334,17 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         res = await A.exists(A.c.text == 'test_delete_inst')
         self.assertFalse(res)
 
-    async def test_otm(self):
-        b_inst = B(text2='test_otm', n=0)
+    async def test_o2m(self):
+        b_inst = B(text2='test_o2m', n=0)
         await b_inst.save()
         c_inst = C()
         await c_inst.save()
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 0)
+        self.assertEqual(await b_inst.c_objs.count(), 0)
         c_inst.b_id = b_inst.pkey
         await c_inst.save()
+        self.assertEqual(await b_inst.c_objs.count(), 1)
         self.assertEqual(len(b_inst.c_objs), 0)
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 1)
@@ -351,9 +356,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         b_inst = await B.get(b_inst.pkey)
         await b_inst.c_objs.fetch()
         self.assertEqual(len(b_inst.c_objs), 2)
+        self.assertEqual(await b_inst.c_objs.count(), 2)
 
-    async def test_otm_or_and(self):
-        b_inst = B(text2='test_otm_or_and', n=0)
+    async def test_o2m_or_and(self):
+        b_inst = B(text2='test_o2m_or_and', n=0)
         await b_inst.save()
         d_inst = D()
         await d_inst.save()

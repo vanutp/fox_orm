@@ -2,7 +2,7 @@ import asyncio
 from abc import abstractmethod, ABC
 from typing import Union, Type, TypeVar, Iterator, Optional, List, Generic, TYPE_CHECKING
 
-from sqlalchemy import and_, select, Table, exists, MetaData
+from sqlalchemy import and_, select, Table, exists, MetaData, func
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import NotFetchedException, OrmException
@@ -96,6 +96,10 @@ class _GenericIterableRelation(ABC):
 
     @abstractmethod
     async def save(self) -> None:
+        ...
+
+    @abstractmethod
+    async def count(self) -> int:
         ...
 
     async def fetch(self) -> None:
@@ -219,6 +223,13 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
             getattr(self._via.c, self._this_id) == self._model.pkey_value
         ))]
 
+    async def count(self) -> int:
+        return await FoxOrm.db.fetch_val(
+            select([func.count()]).select_from(self._via).where(
+                getattr(self._via.c, self._this_id) == self._model.pkey_value
+            )
+        )
+
     async def save(self) -> None:
         self._model.ensure_id()
         self._raise_if_not_initialized()
@@ -273,9 +284,17 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
         return self.to
 
     async def fetch_ids(self) -> List[int]:
+        self._raise_if_not_initialized()
         return [x[self.to.__pkey_name__] for x in await FoxOrm.db.fetch_all(select([self.to.pkey_column]).where(
             getattr(self.to.c, self.key) == self._model.pkey_value
         ))]
+
+    async def count(self) -> int:
+        return await FoxOrm.db.fetch_val(
+            select([func.count()]).select_from(self.to.__table__).where(
+                getattr(self.to.c, self.key) == self._model.pkey_value
+            )
+        )
 
     async def save(self) -> None:
         self._model.ensure_id()
