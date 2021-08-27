@@ -31,6 +31,8 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
     final_type = None
     parsed_type, required = parse_type(annotation)
     if lenient_issubclass(parsed_type, FieldType):
+        # false positive
+        # pylint: disable=no-member
         final_type = parsed_type.sql_type
     elif parsed_type in PY_SQL_TYPES_MAPPING:
         final_type = PY_SQL_TYPES_MAPPING[parsed_type]

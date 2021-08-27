@@ -26,6 +26,7 @@ def is_valid_column_name(name: str) -> bool:
 
 
 def is_valid_column_value(v: Any) -> bool:
+    # pylint: disable=import-outside-toplevel
     from fox_orm.internal.columns import FieldType
 
     is_untouched = isinstance(v, UNTOUCHED_TYPES) or v.__class__.__name__ == 'cython_function_or_method'
@@ -98,14 +99,14 @@ class OrmModelMeta(ModelMetaclass):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')
-            column, value = construct_column(column_name, annotations[column_name], new_namespace[column_name])
+            column, value = construct_column(column_name, annotations[column_name], namespace_value)
             columns[column.name] = column
             new_namespace[column_name] = value
         for column_name, annotation in annotations.items():
             if not is_valid_column_name(column_name):
                 continue
             if column_name not in columns:
-                column, _ = construct_column(column_name, annotations[column_name], tuple())
+                column, _ = construct_column(column_name, annotation, tuple())
                 columns[column.name] = column
         all_columns = list(inherited_columns.values())
         all_columns.extend(columns.values())
@@ -342,6 +343,8 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
 
     @classmethod
     async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
+        # false positive
+        # pylint: disable=comparison-with-callable
         return await cls.select(cls.pkey_column == obj_id, skip_parsing=skip_parsing)
 
     async def fetch_related(self, *fields: str) -> None:

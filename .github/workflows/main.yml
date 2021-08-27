@@ -25,15 +25,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     container:
-      image: python:3.9-alpine
+      image: python:3.9
 
     steps:
       - name: Clone
         uses: actions/checkout@v2
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir pylint
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Lint
         run: |
           pylint $(find ./fox_orm -path '*.py' -print)

@@ -1,10 +1,9 @@
 import importlib
 import re
-from typing import Type, Tuple, Optional, TYPE_CHECKING, Any
+from typing import Type, Tuple, Optional, TYPE_CHECKING
 
 from pydantic import ValidationError, Extra, ConfigError, ExtraError, MissingError
 from pydantic.error_wrappers import ErrorWrapper
-from pydantic.main import UNTOUCHED_TYPES
 from pydantic.typing import ForwardRef
 from pydantic.utils import ROOT_KEY, GetterDict
 
@@ -36,6 +35,7 @@ class OptionalAwaitable:
 _missing = object()
 
 
+# pylint: disable=fixme
 # TODO: add tests
 def validate_model(
         model: Type['OrmModel'], input_data: 'DictStrAny', cls: 'ModelOrDc' = None

@@ -19,7 +19,7 @@ class HashList(List[MODEL]):
     map: dict
 
     def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
-        self.map = dict()
+        self.map = {}
         if items is not None:
             super().__init__(items)
             for i, x in enumerate(items):
@@ -73,7 +73,7 @@ class _GenericIterableRelation(ABC):
 
     def __init__(self):
         self._objects = HashList()
-        self.__modified__ = dict()
+        self.__modified__ = {}
         self._fetched = False
         self._initialized = False
 
@@ -236,7 +236,7 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
                     getattr(self._via.c, self._other_id) == k
                 ))))
         await asyncio.gather(*queries)
-        self.__modified__ = dict()
+        self.__modified__ = {}
 
 
 class OneToMany(Generic[MODEL], _GenericIterableRelation):
@@ -295,7 +295,7 @@ class OneToMany(Generic[MODEL], _GenericIterableRelation):
                     self.key: None
                 }))
         await asyncio.gather(*queries)
-        self.__modified__ = dict()
+        self.__modified__ = {}
 
 
 __all__ = ['ManyToMany', 'OneToMany']

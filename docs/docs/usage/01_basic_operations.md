@@ -2,7 +2,7 @@
 
 ## Create and insert
 
-To create a user just create an instance of model (optionally filling id field),
+To create a user, just create an instance of model (optionally filling id field),
 as you would in pydantic. Then execute `await instance.save()`.
 
 ```python
@@ -57,7 +57,7 @@ For example:
 user = await User.get(1)
 ```
 
-## Select all
+### Select all
 
 You can select multiple rows using `Model.select_all`
 
