@@ -41,12 +41,12 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
             if issubclass(parsed_type, k):
                 final_type = v
                 break
+    column_args = []
     column_kwargs = {'nullable': not required}
 
     value = Field()
 
     type_specified_via_arg = False
-    specified_args = set()
     for arg in args:
         if lenient_issubclass(arg, FieldType) or arg in PY_SQL_TYPES_MAPPING:
             if type_specified_via_arg:
@@ -58,21 +58,17 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
             final_type = PY_SQL_TYPES_MAPPING[arg]
 
         elif isinstance(arg, ColumnArgument):
-            if arg.key in specified_args:
-                raise OrmException(f'Argument {arg.key} specified more than once')
-            specified_args.add(arg.key)
-
             if isinstance(arg, arg_default):
                 if isinstance(arg.value, FunctionType):
                     value = Field(default_factory=arg.value)
                 else:
                     value = Field(default=arg.value)
 
-            arg.apply(column_kwargs)
+            arg.apply(column_args, column_kwargs)
         else:
             raise OrmException(f'Argument {arg} has unknown type {type(arg).__qualname__}')
 
     if final_type is None:
         raise OrmException('No type specified')
 
-    return Column(name, final_type, **column_kwargs), value
+    return Column(name, final_type, *column_args, **column_kwargs), value

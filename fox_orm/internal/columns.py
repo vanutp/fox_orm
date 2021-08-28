@@ -1,5 +1,5 @@
-from abc import ABC
-from typing import Type, Any
+from abc import ABC, abstractmethod
+from typing import Type
 
 from fox_orm.internal.utils import NonInstantiable
 
@@ -9,20 +9,14 @@ class FieldType(NonInstantiable):
 
 
 class ColumnArgument(ABC):
-    key: str
-
-    def apply(self, kwargs):
-        kwargs[self.key] = self.get_value()
-
-    def get_value(self) -> Any:
-        raise NotImplementedError
+    @abstractmethod
+    def apply(self, args: list, kwargs: dict) -> None:
+        ...
 
 
 class ColumnFlag(ColumnArgument):
+    key: str
     inverse: bool
-
-    def get_value(self):
-        return not self.inverse
 
     def __init__(self, key: str, inverse: bool = False):
         self.key = key
@@ -30,3 +24,6 @@ class ColumnFlag(ColumnArgument):
 
     def __invert__(self):
         return ColumnFlag(self.key, not self.inverse)
+
+    def apply(self, args: list, kwargs: dict):
+        kwargs[self.key] = not self.inverse

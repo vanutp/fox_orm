@@ -2,10 +2,11 @@ import os
 import unittest
 from typing import List, Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, ForeignKey
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
+from fox_orm.fields import fkey
 from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
 from tests.utils import schema_to_set
 
@@ -33,6 +34,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             a: str
             b: int
 
+        class AllTypesRelHelper(OrmModel):
+            pkey: int = pk
+
         class AllTypes(OrmModel):
             pkey: Optional[int] = pk
             int_: int
@@ -49,6 +53,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             list_: list
             implicit_json: AllTypesHelper
 
+            foreign_key: int = fkey('all_types_rel_helper.pkey')
+
         all_types_proper_schema = {
             ('pkey', Integer),
             ('int_', Integer),
@@ -62,8 +68,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             ('dict_', JSON),
             ('list_', JSON),
             ('implicit_json', JSON),
+            ('foreign_key', Integer),
         }
         self.assertEqual(schema_to_set(AllTypes.__table__), all_types_proper_schema)
+        self.assertEqual(list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column, AllTypesRelHelper.c.pkey)
         self.assertFalse('_test' in ExtraFields.__table__.columns)
 
         FoxOrm.metadata.create_all(self.engine)

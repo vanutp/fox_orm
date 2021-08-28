@@ -2,7 +2,7 @@ import json as json_mod
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import JSON, BigInteger
+from sqlalchemy import JSON, BigInteger, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 
 from fox_orm.internal.columns import FieldType, ColumnArgument, ColumnFlag
@@ -37,7 +37,7 @@ class default(ColumnArgument):
     def should_set_server_default(self):
         return isinstance(self.value, (int, str, bool, dict, list, BaseModel)) or self.value is None
 
-    def apply(self, kwargs):
+    def apply(self, args: list, kwargs: dict):
         if self.should_set_server_default():
             if isinstance(self.value, BaseModel):
                 kwargs['server_default'] = self.value.json()
@@ -45,9 +45,19 @@ class default(ColumnArgument):
                 kwargs['server_default'] = json_mod.dumps(self.value)
 
 
+# noinspection PyPep8Naming
+# pylint: disable=invalid-name
+class fkey(ColumnArgument):
+    def __init__(self, target: str):
+        self.target = target
+
+    def apply(self, args: list, kwargs: dict):
+        args.append(ForeignKey(self.target))
+
+
 null = ColumnFlag('nullable')
 pk = ColumnFlag('primary_key')
 autoincrement = ColumnFlag('autoincrement')
 unique = ColumnFlag('unique')
 
-__all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique']
+__all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique', 'fkey']
