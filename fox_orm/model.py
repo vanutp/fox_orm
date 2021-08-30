@@ -262,7 +262,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             if self.pkey_value is not None:
                 data[pkey_name] = self.pkey_value
             # pylint: disable=attribute-defined-outside-init
-            self.pkey_value = await FoxOrm.db.execute(table.insert(), data)
+            self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column), data)
             self.__bound__ = True
 
     @classmethod
