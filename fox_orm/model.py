@@ -299,7 +299,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls: Type[MODEL], where, values: dict = None, *,
+    async def select_all(cls: Type[MODEL], where=None, values: dict = None, *,
                          order_by=None, limit=None, offset=None, skip_parsing=False) -> List[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
         q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset), values)
