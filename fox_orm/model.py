@@ -241,13 +241,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         assert getattr(self, self.__pkey_name__, None) is not None
 
     # pylint: disable=access-member-before-definition
-    async def save(self):
+    async def save(self) -> MODEL:
         table = self.__table__
         pkey_name = self.__pkey_name__
         if self.__bound__:
             self.ensure_id()
             if not self.__modified__:
-                return
+                return self
             fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
             await FoxOrm.db.execute(
@@ -264,6 +264,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             # pylint: disable=attribute-defined-outside-init
             self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column), data)
             self.__bound__ = True
+        return self
 
     @classmethod
     def _generate_query(cls, where, order_by, limit, offset):
