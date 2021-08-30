@@ -343,7 +343,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return await FoxOrm.db.fetch_val(query, values)
 
     @classmethod
-    async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> MODEL:
+    async def get(cls: Type[MODEL], obj_id: int, skip_parsing=False) -> Optional[MODEL]:
         # false positive
         # pylint: disable=comparison-with-callable
         return await cls.select(cls.pkey_column == obj_id, skip_parsing=skip_parsing)
