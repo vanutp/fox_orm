@@ -9,9 +9,8 @@ setuptools.setup(
     url='https://hub.vanutp.dev',
     packages=setuptools.find_packages(),
     install_requires=[
-        'databases~=0.4.3',
+        'databases~=0.5.2',
         'pydantic~=1.8.2',
-        'SQLAlchemy~=1.3.24',
     ],
     python_requires='>=3.8',
 )
