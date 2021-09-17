@@ -98,7 +98,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         FoxOrm.init_relations(metadata)
 
-        print(metadata.tables)
         self.assertIn('mid', metadata.tables)
         self.assertNotIn('b_objs', metadata.tables['rel_a'].columns)
         self.assertNotIn('a_objs', metadata.tables['rel_b'].columns)

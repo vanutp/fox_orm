@@ -64,18 +64,25 @@ class HashList(List[MODEL]):
 
 
 class _GenericIterableRelation(ABC):
-    _fetched: bool
+    # FoxOrm.init_relations() called, _from set, _to resolved to class
     _initialized: bool
-    _objects: HashList
-    __modified__: dict
-
+    _from: 'Type[OrmModel]'
+    _to: Union[Type[MODEL], str]  # pylint: disable=unsubscriptable-object
+    # Relation bound to model instance
+    _copied: bool
     _model: 'OrmModel'
+    # Relation objects fetched
+    _fetched: bool
+    _objects: HashList
+
+    __modified__: dict
 
     def __init__(self):
         self._objects = HashList()
         self.__modified__ = {}
         self._fetched = False
         self._initialized = False
+        self._copied = False
 
     @abstractmethod
     def _init(self: RELATION, metadata: MetaData, _from: 'Type[OrmModel]'):
@@ -89,11 +96,6 @@ class _GenericIterableRelation(ABC):
     async def fetch_ids(self) -> List[int]:
         ...
 
-    @property
-    @abstractmethod
-    def objects_type(self) -> Type[MODEL]:
-        ...
-
     @abstractmethod
     async def save(self) -> None:
         ...
@@ -103,19 +105,28 @@ class _GenericIterableRelation(ABC):
         ...
 
     async def fetch(self) -> None:
-        self._raise_if_not_initialized()
-        self._model.ensure_id()
+        self._check_model_state()
         ids = await self.fetch_ids()
         self._objects = HashList(await asyncio.gather(*[self.objects_type.get(x) for x in ids]))
         self._fetched = True
 
     def _raise_if_not_initialized(self):
-        assert self._initialized
+        if not self._initialized:
+            raise OrmException('Relation not initialized, call FoxOrm.init_relations() first')
+
+    def _check_model_state(self):
+        assert self._copied
+        self._model.ensure_id()
 
     def _raise_if_not_fetched(self):
         self._raise_if_not_initialized()
         if not self._fetched:
             raise NotFetchedException('No values were fetched for this relation, first use .fetch_related()')
+
+    @property
+    def objects_type(self) -> Type[MODEL]:
+        self._raise_if_not_initialized()
+        return self._to
 
     def add(self, other: MODEL):
         self._raise_if_not_initialized()
@@ -175,8 +186,6 @@ class _GenericIterableRelation(ABC):
 
 
 class ManyToMany(Generic[MODEL], _GenericIterableRelation):
-    _from: 'Type[OrmModel]'
-    _to: Union[Type[MODEL], str]  # pylint: disable=unsubscriptable-object
     _via: Table
     _via_name: str
     _this_id: str
@@ -200,11 +209,14 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
             self._to = full_import(self._to)
         self._via, self._this_id, self._other_id = \
             FoxOrm.get_assoc_table(metadata, self._from, self._to, self._via_name)
+        self._initialized = True
 
     # pylint: disable=protected-access
     def _init_copy(self: 'ManyToMany', model: 'OrmModel') -> 'ManyToMany':
-        res = ManyToMany(to=self._to, via=self._via)
+        self._raise_if_not_initialized()
+        res = ManyToMany(to=self._to, via=self._via.name)
         res._model = model
+        res._copied = True
         res._initialized = True
         res._via = self._via
         res._from = self._from
@@ -212,18 +224,14 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
         res._other_id = self._other_id
         return res
 
-    @property
-    def objects_type(self) -> Type[MODEL]:
-        self._raise_if_not_initialized()
-        return self._to
-
     async def fetch_ids(self) -> List[int]:
-        self._raise_if_not_initialized()
+        self._check_model_state()
         return [x[self._other_id] for x in await FoxOrm.db.fetch_all(self._via.select().where(
             getattr(self._via.c, self._this_id) == self._model.pkey_value
         ))]
 
     async def count(self) -> int:
+        self._check_model_state()
         return await FoxOrm.db.fetch_val(
             select([func.count()]).select_from(self._via).where(
                 getattr(self._via.c, self._this_id) == self._model.pkey_value
@@ -231,8 +239,7 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
         )
 
     async def save(self) -> None:
-        self._model.ensure_id()
-        self._raise_if_not_initialized()
+        self._check_model_state()
         queries = []
         for k, v in self.__modified__.items():
             entry_exists = await self._get_entry(k)
@@ -251,65 +258,63 @@ class ManyToMany(Generic[MODEL], _GenericIterableRelation):
 
 
 class OneToMany(Generic[MODEL], _GenericIterableRelation):
-    to: Union[Type[MODEL], str]  # pylint: disable=unsubscriptable-object
     key: str
-    _from: 'Type[OrmModel]'
 
     async def _get_entry(self, other_id):
         return await FoxOrm.db.fetch_val(select([exists().where(and_(
-            getattr(self.to.c, self.key) == self._model.pkey_value,
-            self.to.pkey_column == other_id
+            getattr(self._to.c, self.key) == self._model.pkey_value,
+            self._to.pkey_column == other_id
         ))]))
 
     # pylint: disable=unsubscriptable-object
     def __init__(self, to: Union[Type[MODEL], str], key: str):
-        self.to = to
+        self._to = to
         self.key = key
         super().__init__()
 
     def _init(self, metadata: MetaData, _from: 'Type[OrmModel]'):
         self._from = _from
-        if isinstance(self.to, str):
-            self.to = full_import(self.to)
+        if isinstance(self._to, str):
+            self._to = full_import(self._to)
+        self._initialized = True
 
+    # pylint: disable=protected-access
     def _init_copy(self: 'OneToMany', model: MODEL) -> 'OneToMany':
-        res = OneToMany(to=self.to, key=self.key)
-        res._model = model  # pylint: disable=protected-access
-        res._initialized = True  # pylint: disable=protected-access
+        self._raise_if_not_initialized()
+        res = OneToMany(to=self._to, key=self.key)
+        res._model = model
+        res._initialized = True
+        res._copied = True
         return res
 
-    @property
-    def objects_type(self) -> Type[MODEL]:
-        self._raise_if_not_initialized()
-        return self.to
-
     async def fetch_ids(self) -> List[int]:
-        self._raise_if_not_initialized()
-        return [x[self.to.__pkey_name__] for x in await FoxOrm.db.fetch_all(select([self.to.pkey_column]).where(
-            getattr(self.to.c, self.key) == self._model.pkey_value
+        self._check_model_state()
+        return [x[self._to.__pkey_name__] for x in await FoxOrm.db.fetch_all(select([self._to.pkey_column]).where(
+            getattr(self._to.c, self.key) == self._model.pkey_value
         ))]
 
     async def count(self) -> int:
+        self._check_model_state()
         return await FoxOrm.db.fetch_val(
-            select([func.count()]).select_from(self.to.__table__).where(
-                getattr(self.to.c, self.key) == self._model.pkey_value
+            select([func.count()]).select_from(self._to.__table__).where(
+                getattr(self._to.c, self.key) == self._model.pkey_value
             )
         )
 
     async def save(self) -> None:
-        self._model.ensure_id()
+        self._check_model_state()
         queries = []
         for k, v in self.__modified__.items():
             entry_exists = await self._get_entry(k)
             if v and not entry_exists:
-                queries.append(FoxOrm.db.execute(self.to.__table__.update().where(
-                    self.to.pkey_column == k
+                queries.append(FoxOrm.db.execute(self._to.__table__.update().where(
+                    self._to.pkey_column == k
                 ), {
                     self.key: self._model.pkey_value
                 }))
             elif not v and entry_exists:
-                queries.append(FoxOrm.db.execute(self.to.__table__.update().where(
-                    self.to.pkey_column == k
+                queries.append(FoxOrm.db.execute(self._to.__table__.update().where(
+                    self._to.pkey_column == k
                 ), {
                     self.key: None
                 }))

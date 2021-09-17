@@ -1,6 +1,7 @@
 import asyncio
 from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
 
+from databases.backends.sqlite import SQLiteBackend
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass, UNTOUCHED_TYPES
 from sqlalchemy import select, func, Table, exists, MetaData, Column
@@ -257,12 +258,13 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             self.__modified__.clear()
         else:
             data = self.dict(exclude={pkey_name}, include=self.__fields__.keys())
-            if len(data) == 0:
-                data[pkey_name] = None
             if self.pkey_value is not None:
                 data[pkey_name] = self.pkey_value
             # pylint: disable=attribute-defined-outside-init
-            self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column), data)
+            if not isinstance(FoxOrm.db.connection()._backend, SQLiteBackend):
+                self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column).values(**data))
+            else:
+                self.pkey_value = await FoxOrm.db.execute(table.insert().values(**data))
             self.__bound__ = True
         return self
 
