@@ -59,5 +59,6 @@ null = ColumnFlag('nullable')
 pk = ColumnFlag('primary_key')
 autoincrement = ColumnFlag('autoincrement')
 unique = ColumnFlag('unique')
+index = ColumnFlag('index')
 
-__all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique', 'fkey']
+__all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique', 'fkey', 'index']
