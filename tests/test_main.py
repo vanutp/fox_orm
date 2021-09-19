@@ -1,6 +1,6 @@
 import os
 import unittest
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from sqlalchemy import create_engine, Column, ForeignKey
 
@@ -51,6 +51,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
             dict_: dict
             list_: list
+            typed_dict: Dict[str, str]
+            typed_list: List[int]
             implicit_json: AllTypesHelper
 
             foreign_key: int = fkey('all_types_rel_helper.pkey')
@@ -67,6 +69,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             ('timedelta_', Interval),
             ('dict_', JSON),
             ('list_', JSON),
+            ('typed_dict', JSON),
+            ('typed_list', JSON),
             ('implicit_json', JSON),
             ('foreign_key', Integer),
         }

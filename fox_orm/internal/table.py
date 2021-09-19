@@ -1,3 +1,4 @@
+import typing
 from types import FunctionType
 from typing import Type, Tuple
 
@@ -17,7 +18,7 @@ def parse_type(type_: Type):
         arbitrary_types_allowed = True
 
     parsed = ModelField(name='', type_=type_, model_config=Config, class_validators=None)
-    return parsed.type_, parsed.required
+    return parsed.outer_type_, parsed.required
 
 
 MISSING = object()
@@ -30,6 +31,7 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
 
     final_type = None
     parsed_type, required = parse_type(annotation)
+    parsed_type = typing.get_origin(parsed_type) or parsed_type
     if lenient_issubclass(parsed_type, FieldType):
         # false positive
         # pylint: disable=no-member
@@ -38,7 +40,7 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
         final_type = PY_SQL_TYPES_MAPPING[parsed_type]
     else:
         for k, v in PY_SQL_TYPES_MAPPING.items():
-            if issubclass(parsed_type, k):
+            if lenient_issubclass(parsed_type, k):
                 final_type = v
                 break
     column_args = []
@@ -71,6 +73,6 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
             raise OrmException(f'Argument {arg} has unknown type {type(arg).__qualname__}')
 
     if final_type is None:
-        raise OrmException('No type specified')
+        raise OrmException(f'Bad type specified for column {name}')
 
     return Column(name, final_type, *column_args, **column_kwargs), value
