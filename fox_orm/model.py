@@ -84,6 +84,9 @@ class OrmModelMeta(ModelMetaclass):
         metadata = namespace.get('__metadata__', None) or FoxOrm.metadata
         abstract = namespace.get('__abstract__', None) or False
 
+        if len(bases) == 1 and issubclass(bases[0], OrmModel) and bases[0] != OrmModel and bases[0].__name__ == name:
+            abstract = True
+
         new_namespace = {}
         relation_namespace = {}
         for k, v in namespace.items():
