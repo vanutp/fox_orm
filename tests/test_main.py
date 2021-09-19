@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, Column, ForeignKey
 
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
-from fox_orm.fields import fkey, null
+from fox_orm.fields import fkey, null, index, autoincrement, unique
 from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
 from tests.utils import schema_to_set
 
@@ -42,10 +42,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             int_: int = null
             float_: float = ~null
             str_: Optional[str]
-            bool_: bool
+            bool_: bool = autoincrement
 
-            datetime_: datetime
-            date_: date
+            datetime_: datetime = index
+            date_: date = unique
             time_: time
             timedelta_: timedelta
 
@@ -75,6 +75,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(AllTypes.c.int_.nullable)
         self.assertFalse(AllTypes.c.float_.nullable)
         self.assertTrue(AllTypes.c.str_.nullable)
+        self.assertTrue(AllTypes.c.bool_.autoincrement)
+        self.assertTrue(AllTypes.c.datetime_.index)
+        self.assertTrue(AllTypes.c.date_.unique)
         self.assertEqual(list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column, AllTypesRelHelper.c.pkey)
         self.assertFalse('_test' in ExtraFields.__table__.columns)
 
