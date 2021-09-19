@@ -42,7 +42,9 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
                 final_type = v
                 break
     column_args = []
-    column_kwargs = {'nullable': not required}
+    column_kwargs = {}
+    if required:
+        column_kwargs['nullable'] = False
 
     value = Field()
 
