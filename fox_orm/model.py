@@ -1,7 +1,6 @@
 import asyncio
 from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
 
-from databases.backends.sqlite import SQLiteBackend
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass, UNTOUCHED_TYPES
 from sqlalchemy import select, func, Table, exists, MetaData, Column
@@ -14,6 +13,13 @@ from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
 from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
 from fox_orm.relations import _GenericIterableRelation
+
+try:
+    from databases.backends.sqlite import SQLiteBackend
+except ImportError:
+    # Class is only used in isinstance checking
+    class SQLiteBackend:
+        ...
 
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
