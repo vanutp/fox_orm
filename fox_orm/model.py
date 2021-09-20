@@ -69,13 +69,25 @@ class OrmModelMeta(ModelMetaclass):
         mcs._check_type(namespace, '__metadata__', MetaData)
         mcs._check_type(namespace, '__abstract__', bool)
 
+    def get_namespace(cls):
+        namespace = {}
+        namespace['__annotations__'] = annotations = {}
+        for base in cls.mro():
+            if not (issubclass(base, OrmModel) and base is not OrmModel):
+                break
+            for column_name, namespace_value in base.__fields__.items():
+                namespace[column_name] = namespace_value
+            for column_name, annotation in base.__annotations__.items():
+                annotations[column_name] = annotation
+        return namespace
+
     def __new__(mcs, name, bases, namespace, **kwargs):
         if bases[0] == BaseModel:
             return super().__new__(mcs, name, bases, namespace, **kwargs)
 
         inherited_columns = {}
         for base in bases[::-1]:
-            if issubclass(base, OrmModel) and base != OrmModel:
+            if issubclass(base, OrmModel) and base is not OrmModel:
                 inherited_columns.update({x.name: x.copy() for x in base.__columns__})
 
         mcs._ensure_proper_init(namespace)
@@ -83,9 +95,6 @@ class OrmModelMeta(ModelMetaclass):
         table_name = namespace.get('__tablename__', None) or camel_to_snake(name)
         metadata = namespace.get('__metadata__', None) or FoxOrm.metadata
         abstract = namespace.get('__abstract__', None) or False
-
-        if len(bases) == 1 and issubclass(bases[0], OrmModel) and bases[0] != OrmModel and bases[0].__name__ == name:
-            abstract = True
 
         new_namespace = {}
         relation_namespace = {}
@@ -118,8 +127,16 @@ class OrmModelMeta(ModelMetaclass):
             if column_name not in columns:
                 column, _ = construct_column(column_name, annotation, tuple())
                 columns[column.name] = column
-        all_columns = list(inherited_columns.values())
-        all_columns.extend(columns.values())
+        all_columns = inherited_columns.copy()
+        all_columns.update(columns)
+        all_columns = all_columns.values()
+
+        # Hack for generating FastAPI models
+        if len(bases) == 1 and \
+                issubclass((base := bases[0]), OrmModel) and \
+                base is not OrmModel and \
+                base.__name__ == name:
+            return ModelMetaclass(name, (BaseModel,), base.get_namespace())
 
         new_namespace['__abstract__'] = abstract
         new_namespace['__columns__'] = all_columns

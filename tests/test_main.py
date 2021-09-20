@@ -438,7 +438,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(inst.text, 'test_select_raw_sql')
 
     async def test_inheritance(self):
-        from sqlalchemy import MetaData, Integer
+        from sqlalchemy import MetaData, Integer, JSON
         from fox_orm import OrmModel
         from fox_orm.fields import pk
 
@@ -447,14 +447,17 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         class Test(OrmModel):
             __metadata__ = metadata
             pkey: Optional[int] = pk
+            test: str
 
         class TestInherited(Test):
             __metadata__ = metadata
             test: int
+            test2: dict
 
         proper_schema = {
             ('pkey', Integer),
             ('test', Integer),
+            ('test2', JSON),
         }
         self.assertEqual(TestInherited.__table__.name, 'test_inherited')
         self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
