@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, Column, ForeignKey
 from fox_orm import FoxOrm
 from fox_orm.exceptions import *
 from fox_orm.fields import fkey, null, index, autoincrement, unique
+from fox_orm.relations import ManyToMany
 from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
 from tests.utils import schema_to_set
 
@@ -492,3 +493,12 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
         TestInherited(pkey=123, test=456)
         TestInherited.construct({'pkey': 123, 'test': 456})
+
+    async def test_getattribute(self):
+        self.assertEqual(A.__table__.c.pkey, A.pkey)
+        self.assertEqual(A.__table__.c.text, A.text)
+        self.assertEqual(A.__table__.c.n, A.n)
+        self.assertEqual(A.__table__.c.recursive, A.recursive)
+        self.assertIsInstance(A.b_objs, ManyToMany)
+        self.assertIs(A.b_objs._to, B)
+

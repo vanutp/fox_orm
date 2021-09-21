@@ -1,4 +1,6 @@
 import asyncio
+import os
+import traceback
 from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
 
 from pydantic import BaseModel
@@ -43,8 +45,9 @@ def is_valid_column_value(v: Any) -> bool:
 
 class OrmModelMeta(ModelMetaclass):
     if TYPE_CHECKING:
-        __columns__: List[Column]
+        __columns__: Dict[str, Column]
         __table__: Table
+        __relations__: dict
         __tablename__: str
         __metadata__: MetaData
         __abstract__: bool
@@ -81,6 +84,21 @@ class OrmModelMeta(ModelMetaclass):
                 annotations[column_name] = annotation
         return namespace
 
+    def __getattribute__(cls, item):
+        caller = traceback.extract_stack()[-2]
+        if caller.name == 'validate_field_name' and caller.filename.endswith(f'{os.sep}pydantic{os.sep}utils.py'):
+            return super().__getattribute__(item)
+
+        if item.startswith('_'):
+            return super().__getattribute__(item)
+
+        if item in cls.__columns__:
+            return getattr(cls.__table__.columns, item)
+        if item in cls.__relations__:
+            return cls.__relations__[item]
+
+        return super().__getattribute__(item)
+
     def __new__(mcs, name, bases, namespace, **kwargs):
         if bases[0] == BaseModel:
             return super().__new__(mcs, name, bases, namespace, **kwargs)
@@ -88,7 +106,7 @@ class OrmModelMeta(ModelMetaclass):
         inherited_columns = {}
         for base in bases[::-1]:
             if issubclass(base, OrmModel) and base is not OrmModel:
-                inherited_columns.update({x.name: x.copy() for x in base.__columns__})
+                inherited_columns.update({x.name: x.copy() for x in base.__columns__.values()})
 
         mcs._ensure_proper_init(namespace)
 
@@ -129,7 +147,6 @@ class OrmModelMeta(ModelMetaclass):
                 columns[column.name] = column
         all_columns = inherited_columns.copy()
         all_columns.update(columns)
-        all_columns = all_columns.values()
 
         # Hack for generating FastAPI models
         if len(bases) == 1 and \
@@ -145,10 +162,10 @@ class OrmModelMeta(ModelMetaclass):
             new_namespace['__table__'] = None
             new_namespace['c'] = None
         else:
-            if sum([x.primary_key for x in all_columns]) != 1:
+            if sum([x.primary_key for x in all_columns.values()]) != 1:
                 raise OrmException('Model should have exactly one primary key')
-            new_namespace['__pkey_name__'] = [x.name for x in all_columns if x.primary_key][0]
-            new_namespace['__table__'] = table = Table(table_name, metadata, *all_columns)
+            new_namespace['__pkey_name__'] = [x.name for x in all_columns.values() if x.primary_key][0]
+            new_namespace['__table__'] = table = Table(table_name, metadata, *all_columns.values())
             new_namespace['c'] = table.c
         new_namespace['__relations__'] = relation_namespace
 
@@ -166,7 +183,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
     if TYPE_CHECKING:
         # cls attrs
         __private_attributes__: Dict[str, Any]
-        __columns__: List[Column]
+        __columns__: Dict[str, Column]
         __table__: Table
         __relations__: dict
         __tablename__: str
