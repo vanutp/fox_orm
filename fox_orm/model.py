@@ -153,7 +153,12 @@ class OrmModelMeta(ModelMetaclass):
                 issubclass((base := bases[0]), OrmModel) and \
                 base is not OrmModel and \
                 base.__name__ == name:
-            return ModelMetaclass(name, (BaseModel,), base.get_namespace())
+            stack = traceback.extract_stack()
+            if len(stack) >= 3:
+                caller = stack[-3]
+                if caller.name == 'create_cloned_field' and \
+                        caller.filename.endswith(f'{os.sep}fastapi{os.sep}utils.py'):
+                    return ModelMetaclass(name, (BaseModel,), base.get_namespace())
 
         new_namespace['__abstract__'] = abstract
         new_namespace['__columns__'] = all_columns
