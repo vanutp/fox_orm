@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name='fox-orm',
-    version='0.3.5',
+    version='0.3.5.1',
     author='vanutp',
     author_email='hello@vanutp.dev',
     description='Simple pydantic & databases based orm',
