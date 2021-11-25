@@ -310,7 +310,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
                 data[pkey_name] = self.pkey_value
             # pylint: disable=attribute-defined-outside-init
             if not isinstance(FoxOrm.db.connection()._backend, SQLiteBackend):
-                self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column).values(**data))
+                self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column), data)
             else:
                 self.pkey_value = await FoxOrm.db.execute(table.insert().values(**data))
             self.__bound__ = True

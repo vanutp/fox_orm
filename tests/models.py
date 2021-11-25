@@ -1,3 +1,4 @@
+import datetime
 from typing import Optional, List
 
 from pydantic import BaseModel, Extra
@@ -45,6 +46,11 @@ class C(OrmModel):
 class D(OrmModel):
     pkey: Optional[int] = pk
     c_objs: OneToMany['C'] = OneToMany(to='tests.models.C', key='d_id')
+
+
+class E(OrmModel):
+    pkey: Optional[int] = pk
+    dt: datetime.datetime
 
 
 class ExtraFields(OrmModel):

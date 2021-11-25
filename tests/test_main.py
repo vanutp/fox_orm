@@ -1,3 +1,4 @@
+import datetime
 import os
 import unittest
 from typing import List, Optional, Dict
@@ -8,7 +9,7 @@ from fox_orm import FoxOrm
 from fox_orm.exceptions import *
 from fox_orm.fields import fkey, null, index, autoincrement, unique
 from fox_orm.relations import ManyToMany
-from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields
+from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields, E
 from tests.utils import schema_to_set
 
 DB_FILE = 'test.db'
@@ -155,6 +156,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         b_inst = B(text2='test2', n=0)
         await b_inst.save()
         self.assertIsNotNone(b_inst.pkey)
+
+    async def test_datetime(self):
+        dt = datetime.datetime.now()
+        inst = E(dt=dt)
+        await inst.save()
+        self.assertIsNotNone(inst.pkey)
+        inst = await E.get(inst.pkey)
+        self.assertEqual(inst.dt, dt)
 
     async def test_select(self):
         inst = A(text='test_select', n=0)
