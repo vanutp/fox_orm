@@ -210,8 +210,6 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             a_inst.b_objs.add(b_inst)
         self.assertEqual(await a_inst.b_objs.count(), 0)
         await a_inst.b_objs.save()
-        with self.assertRaises(NotFetchedException):
-            self.assertEqual(len(a_inst.b_objs), 10)
         self.assertEqual(await a_inst.b_objs.count(), 10)
         await a_inst.b_objs.fetch()
         self.assertEqual(len(a_inst.b_objs), 10)
