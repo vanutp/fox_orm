@@ -1,9 +1,0 @@
--e .
-
-aiosqlite
-pylint
-pytest
-coverage
-yappi
-fastapi
-uvicorn

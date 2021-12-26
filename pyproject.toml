@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "fox-orm"
+version = "0.3.6"
+description = "Simple databases based ORM with pythonic syntax"
+authors = ["vanutp <hello@vanutp.dev>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+databases = "^0.5.3"
+
+[tool.poetry.dev-dependencies]
+aiosqlite = "^0.17.0"
+pytest = "^6.2.5"
+coverage = "^6.2"
+yappi = "^1.3.3"
+fastapi = "^0.70.1"
+black = "^21.12b0"
+flake8 = "^4.0.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

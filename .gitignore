@@ -4,6 +4,7 @@
 build/
 dist/
 *.db
-**/venv/
+venv/
+.venv/
 docs/site
 pydantic/
