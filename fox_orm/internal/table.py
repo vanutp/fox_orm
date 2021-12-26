@@ -17,7 +17,9 @@ def parse_type(type_: Type):
     class Config(BaseConfig):
         arbitrary_types_allowed = True
 
-    parsed = ModelField(name='', type_=type_, model_config=Config, class_validators=None)
+    parsed = ModelField(
+        name='', type_=type_, model_config=Config, class_validators=None
+    )
     return parsed.outer_type_, parsed.required
 
 
@@ -70,7 +72,9 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
 
             arg.apply(column_args, column_kwargs)
         else:
-            raise OrmException(f'Argument {arg} has unknown type {type(arg).__qualname__}')
+            raise OrmException(
+                f'Argument {arg} has unknown type {type(arg).__qualname__}'
+            )
 
     if final_type is None:
         raise OrmException(f'Bad type specified for column {name}')

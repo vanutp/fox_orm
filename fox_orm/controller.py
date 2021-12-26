@@ -39,11 +39,11 @@ class _FoxOrmMeta(type):
         await cls.db.disconnect()  # pylint: disable=no-member
 
     def get_assoc_table(
-            cls,
-            metadata: MetaData,
-            a: 'Union[Type[OrmModel], str]',
-            b: 'Union[Type[OrmModel], str]',
-            name: str
+        cls,
+        metadata: MetaData,
+        a: 'Union[Type[OrmModel], str]',
+        b: 'Union[Type[OrmModel], str]',
+        name: str,
     ):
         a_name = a if isinstance(a, str) else a.__table__.name
         b_name = b if isinstance(b, str) else b.__table__.name
@@ -51,14 +51,31 @@ class _FoxOrmMeta(type):
         if name in tables:
             table = tables[name]
         else:
-            table = Table(name, metadata,
-                          Column(f'{a_name}_id', Integer, ForeignKey(f'{a_name}.{a.__pkey_name__}'), primary_key=True),
-                          Column(f'{b_name}_id', Integer, ForeignKey(f'{b_name}.{a.__pkey_name__}'), primary_key=True)
-                          )
+            table = Table(
+                name,
+                metadata,
+                Column(
+                    f'{a_name}_id',
+                    Integer,
+                    ForeignKey(f'{a_name}.{a.__pkey_name__}'),
+                    primary_key=True,
+                ),
+                Column(
+                    f'{b_name}_id',
+                    Integer,
+                    ForeignKey(f'{b_name}.{a.__pkey_name__}'),
+                    primary_key=True,
+                ),
+            )
             tables[name] = table
         return table, f'{a_name}_id', f'{b_name}_id'
 
-    def _lazyinit_relation(cls, metadata: MetaData, relation: '_GenericIterableRelation', model_cls: 'Type[OrmModel]'):
+    def _lazyinit_relation(
+        cls,
+        metadata: MetaData,
+        relation: '_GenericIterableRelation',
+        model_cls: 'Type[OrmModel]',
+    ):
         cls._lazyinit_relations[metadata].append((relation, model_cls))
 
     def init_relations(cls, metadata: MetaData = None):

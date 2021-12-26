@@ -11,8 +11,13 @@ from fox_orm.internal.const import EXCLUDE_KEYS
 
 if TYPE_CHECKING:
     from fox_orm.model import OrmModel
-    from pydantic.types import ModelOrDc  # pylint: disable=no-name-in-module,ungrouped-imports
-    from pydantic.typing import DictStrAny, SetStr  # pylint: disable=no-name-in-module,ungrouped-imports
+    from pydantic.types import (
+        ModelOrDc,
+    )  # pylint: disable=no-name-in-module,ungrouped-imports
+    from pydantic.typing import (
+        DictStrAny,
+        SetStr,
+    )  # pylint: disable=no-name-in-module,ungrouped-imports
 
 
 def full_import(name):
@@ -38,7 +43,7 @@ _missing = object()
 # pylint: disable=fixme
 # TODO: add tests
 def validate_model(
-        model: Type['OrmModel'], input_data: 'DictStrAny', cls: 'ModelOrDc' = None
+    model: Type['OrmModel'], input_data: 'DictStrAny', cls: 'ModelOrDc' = None
 ) -> Tuple['DictStrAny', 'SetStr', Optional[ValidationError]]:
     # pylint: disable=R,E
     """
@@ -72,7 +77,11 @@ def validate_model(
 
         value = input_data.get(field.alias, _missing)
         using_name = False
-        if value is _missing and config.allow_population_by_field_name and field.alt_alias:
+        if (
+            value is _missing
+            and config.allow_population_by_field_name
+            and field.alt_alias
+        ):
             value = input_data.get(field.name, _missing)
             using_name = True
 

@@ -1,6 +1,15 @@
 import asyncio
 from abc import abstractmethod, ABC
-from typing import Union, Type, TypeVar, Iterator, Optional, List, Generic, TYPE_CHECKING
+from typing import (
+    Union,
+    Type,
+    TypeVar,
+    Iterator,
+    Optional,
+    List,
+    Generic,
+    TYPE_CHECKING,
+)
 
 from sqlalchemy import and_, select, Table, exists, MetaData, func
 
@@ -72,7 +81,9 @@ class _GenericIterableRelation(List[MODEL], ABC):
 
     def _raise_if_not_initialized(self):
         if not self._initialized:
-            raise OrmException('Relation not initialized, call FoxOrm.init_relations() first')
+            raise OrmException(
+                'Relation not initialized, call FoxOrm.init_relations() first'
+            )
 
     def _check_model_state(self):
         assert self._copied
@@ -81,7 +92,9 @@ class _GenericIterableRelation(List[MODEL], ABC):
     def _raise_if_not_fetched(self):
         self._raise_if_not_initialized()
         if not self._fetched:
-            raise NotFetchedException('No values were fetched for this relation, first use .fetch_related()')
+            raise NotFetchedException(
+                'No values were fetched for this relation, first use .fetch_related()'
+            )
 
     @property
     def objects_type(self) -> Type[MODEL]:
@@ -116,7 +129,9 @@ class _GenericIterableRelation(List[MODEL], ABC):
         self.__modified__[other.pkey_value] = False
         return OptionalAwaitable(self.save)
 
-    def __contains__(self, item: Union[MODEL, int]) -> bool:  # pylint: disable=unsubscriptable-object
+    def __contains__(
+        self, item: Union[MODEL, int]
+    ) -> bool:  # pylint: disable=unsubscriptable-object
         self._raise_if_not_fetched()
         if item is None:
             return False
@@ -129,7 +144,9 @@ class _GenericIterableRelation(List[MODEL], ABC):
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+            raise OrmException(
+                'given relation\'s objects type is incompatible with this relation\'s type'
+            )
 
         result = []
         for x in other:
@@ -142,7 +159,9 @@ class _GenericIterableRelation(List[MODEL], ABC):
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+            raise OrmException(
+                'given relation\'s objects type is incompatible with this relation\'s type'
+            )
 
         result = []
         for x in other:
@@ -160,10 +179,19 @@ class ManyToMany(_GenericIterableRelation):
     _other_id: str
 
     async def _get_entry(self, other_id):
-        return await FoxOrm.db.fetch_val(select([exists().where(and_(
-            getattr(self._via.c, self._this_id) == self._model.pkey_value,
-            getattr(self._via.c, self._other_id) == other_id
-        ))]))
+        return await FoxOrm.db.fetch_val(
+            select(
+                [
+                    exists().where(
+                        and_(
+                            getattr(self._via.c, self._this_id)
+                            == self._model.pkey_value,
+                            getattr(self._via.c, self._other_id) == other_id,
+                        )
+                    )
+                ]
+            )
+        )
 
     # pylint: disable=unsubscriptable-object
     def __init__(self, to: Union[Type[MODEL], str], via: str):
@@ -175,8 +203,9 @@ class ManyToMany(_GenericIterableRelation):
         self._from = _from
         if isinstance(self._to, str):
             self._to = full_import(self._to)
-        self._via, self._this_id, self._other_id = \
-            FoxOrm.get_assoc_table(metadata, self._from, self._to, self._via_name)
+        self._via, self._this_id, self._other_id = FoxOrm.get_assoc_table(
+            metadata, self._from, self._to, self._via_name
+        )
         self._initialized = True
 
     # pylint: disable=protected-access
@@ -194,16 +223,21 @@ class ManyToMany(_GenericIterableRelation):
 
     async def fetch_ids(self) -> List[int]:
         self._check_model_state()
-        return [x[self._other_id] for x in await FoxOrm.db.fetch_all(self._via.select().where(
-            getattr(self._via.c, self._this_id) == self._model.pkey_value
-        ))]
+        return [
+            x[self._other_id]
+            for x in await FoxOrm.db.fetch_all(
+                self._via.select().where(
+                    getattr(self._via.c, self._this_id) == self._model.pkey_value
+                )
+            )
+        ]
 
     async def count(self) -> int:
         self._check_model_state()
         return await FoxOrm.db.fetch_val(
-            select([func.count()]).select_from(self._via).where(
-                getattr(self._via.c, self._this_id) == self._model.pkey_value
-            )
+            select([func.count()])
+            .select_from(self._via)
+            .where(getattr(self._via.c, self._this_id) == self._model.pkey_value)
         )
 
     async def save(self) -> None:
@@ -212,15 +246,24 @@ class ManyToMany(_GenericIterableRelation):
         for k, v in self.__modified__.items():
             entry_exists = await self._get_entry(k)
             if v and not entry_exists:
-                queries.append(FoxOrm.db.execute(self._via.insert(), {
-                    self._this_id: self._model.pkey_value,
-                    self._other_id: k
-                }))
+                queries.append(
+                    FoxOrm.db.execute(
+                        self._via.insert(),
+                        {self._this_id: self._model.pkey_value, self._other_id: k},
+                    )
+                )
             elif not v and entry_exists:
-                queries.append(FoxOrm.db.execute(self._via.delete().where(and_(
-                    getattr(self._via.c, self._this_id) == self._model.pkey_value,
-                    getattr(self._via.c, self._other_id) == k
-                ))))
+                queries.append(
+                    FoxOrm.db.execute(
+                        self._via.delete().where(
+                            and_(
+                                getattr(self._via.c, self._this_id)
+                                == self._model.pkey_value,
+                                getattr(self._via.c, self._other_id) == k,
+                            )
+                        )
+                    )
+                )
         await asyncio.gather(*queries)
         self.__modified__ = {}
 
@@ -229,10 +272,18 @@ class OneToMany(_GenericIterableRelation):
     key: str
 
     async def _get_entry(self, other_id):
-        return await FoxOrm.db.fetch_val(select([exists().where(and_(
-            getattr(self._to.c, self.key) == self._model.pkey_value,
-            self._to.pkey_column == other_id
-        ))]))
+        return await FoxOrm.db.fetch_val(
+            select(
+                [
+                    exists().where(
+                        and_(
+                            getattr(self._to.c, self.key) == self._model.pkey_value,
+                            self._to.pkey_column == other_id,
+                        )
+                    )
+                ]
+            )
+        )
 
     # pylint: disable=unsubscriptable-object
     def __init__(self, to: Union[Type[MODEL], str], key: str):
@@ -257,16 +308,21 @@ class OneToMany(_GenericIterableRelation):
 
     async def fetch_ids(self) -> List[int]:
         self._check_model_state()
-        return [x[self._to.__pkey_name__] for x in await FoxOrm.db.fetch_all(select([self._to.pkey_column]).where(
-            getattr(self._to.c, self.key) == self._model.pkey_value
-        ))]
+        return [
+            x[self._to.__pkey_name__]
+            for x in await FoxOrm.db.fetch_all(
+                select([self._to.pkey_column]).where(
+                    getattr(self._to.c, self.key) == self._model.pkey_value
+                )
+            )
+        ]
 
     async def count(self) -> int:
         self._check_model_state()
         return await FoxOrm.db.fetch_val(
-            select([func.count()]).select_from(self._to.__table__).where(
-                getattr(self._to.c, self.key) == self._model.pkey_value
-            )
+            select([func.count()])
+            .select_from(self._to.__table__)
+            .where(getattr(self._to.c, self.key) == self._model.pkey_value)
         )
 
     async def save(self) -> None:
@@ -275,17 +331,19 @@ class OneToMany(_GenericIterableRelation):
         for k, v in self.__modified__.items():
             entry_exists = await self._get_entry(k)
             if v and not entry_exists:
-                queries.append(FoxOrm.db.execute(self._to.__table__.update().where(
-                    self._to.pkey_column == k
-                ), {
-                    self.key: self._model.pkey_value
-                }))
+                queries.append(
+                    FoxOrm.db.execute(
+                        self._to.__table__.update().where(self._to.pkey_column == k),
+                        {self.key: self._model.pkey_value},
+                    )
+                )
             elif not v and entry_exists:
-                queries.append(FoxOrm.db.execute(self._to.__table__.update().where(
-                    self._to.pkey_column == k
-                ), {
-                    self.key: None
-                }))
+                queries.append(
+                    FoxOrm.db.execute(
+                        self._to.__table__.update().where(self._to.pkey_column == k),
+                        {self.key: None},
+                    )
+                )
         await asyncio.gather(*queries)
         self.__modified__ = {}
 

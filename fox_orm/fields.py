@@ -35,7 +35,10 @@ class default(ColumnArgument):
         self.value = value
 
     def should_set_server_default(self):
-        return isinstance(self.value, (int, str, bool, dict, list, BaseModel)) or self.value is None
+        return (
+            isinstance(self.value, (int, str, bool, dict, list, BaseModel))
+            or self.value is None
+        )
 
     def apply(self, args: list, kwargs: dict):
         if self.should_set_server_default():
@@ -61,4 +64,15 @@ autoincrement = ColumnFlag('autoincrement')
 unique = ColumnFlag('unique')
 index = ColumnFlag('index')
 
-__all__ = ['int64', 'json', 'jsonb', 'default', 'null', 'pk', 'autoincrement', 'unique', 'fkey', 'index']
+__all__ = [
+    'int64',
+    'json',
+    'jsonb',
+    'default',
+    'null',
+    'pk',
+    'autoincrement',
+    'unique',
+    'fkey',
+    'index',
+]

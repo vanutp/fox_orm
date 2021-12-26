@@ -1,7 +1,17 @@
 import asyncio
 import os
 import traceback
-from typing import Union, Mapping, TYPE_CHECKING, Dict, Any, TypeVar, List, Type, Optional
+from typing import (
+    Union,
+    Mapping,
+    TYPE_CHECKING,
+    Dict,
+    Any,
+    TypeVar,
+    List,
+    Type,
+    Optional,
+)
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass, UNTOUCHED_TYPES
@@ -13,7 +23,11 @@ from fox_orm import FoxOrm
 from fox_orm.exceptions import OrmException
 from fox_orm.internal.const import EXCLUDE_KEYS
 from fox_orm.internal.table import construct_column
-from fox_orm.internal.utils import class_or_instancemethod, camel_to_snake, validate_model
+from fox_orm.internal.utils import (
+    class_or_instancemethod,
+    camel_to_snake,
+    validate_model,
+)
 from fox_orm.relations import _GenericIterableRelation
 
 try:
@@ -23,9 +37,15 @@ except ImportError:
     class SQLiteBackend:
         ...
 
+
 if TYPE_CHECKING:
     # pylint: disable=no-name-in-module,ungrouped-imports
-    from pydantic.typing import MappingIntStrAny, AbstractSetIntStr, TupleGenerator, ReprArgs
+    from pydantic.typing import (
+        MappingIntStrAny,
+        AbstractSetIntStr,
+        TupleGenerator,
+        ReprArgs,
+    )
 
 MODEL = TypeVar('MODEL', bound='OrmModel')
 
@@ -38,7 +58,10 @@ def is_valid_column_value(v: Any) -> bool:
     # pylint: disable=import-outside-toplevel
     from fox_orm.internal.columns import FieldType
 
-    is_untouched = isinstance(v, UNTOUCHED_TYPES) or v.__class__.__name__ == 'cython_function_or_method'
+    is_untouched = (
+        isinstance(v, UNTOUCHED_TYPES)
+        or v.__class__.__name__ == 'cython_function_or_method'
+    )
     is_field_type = isinstance(v, type) and issubclass(v, FieldType)
     return not is_untouched or is_field_type
 
@@ -65,7 +88,9 @@ class OrmModelMeta(ModelMetaclass):
     @classmethod
     def _ensure_proper_init(mcs, namespace):
         if '__sqla_table__' in namespace:
-            raise OrmException('You are using pre 0.3 model syntax. Check the docs for new instructions')
+            raise OrmException(
+                'You are using pre 0.3 model syntax. Check the docs for new instructions'
+            )
         if '__table__' in namespace:
             raise OrmException('__table__ should not be set')
         mcs._check_type(namespace, '__tablename__', str)
@@ -86,7 +111,9 @@ class OrmModelMeta(ModelMetaclass):
 
     def __getattribute__(cls, item):
         caller = traceback.extract_stack()[-2]
-        if caller.name == 'validate_field_name' and caller.filename.endswith(f'{os.sep}pydantic{os.sep}utils.py'):
+        if caller.name == 'validate_field_name' and caller.filename.endswith(
+            f'{os.sep}pydantic{os.sep}utils.py'
+        ):
             return super().__getattribute__(item)
 
         if item.startswith('_'):
@@ -106,7 +133,9 @@ class OrmModelMeta(ModelMetaclass):
         inherited_columns = {}
         for base in bases[::-1]:
             if issubclass(base, OrmModel) and base is not OrmModel:
-                inherited_columns.update({x.name: x.copy() for x in base.__columns__.values()})
+                inherited_columns.update(
+                    {x.name: x.copy() for x in base.__columns__.values()}
+                )
 
         mcs._ensure_proper_init(namespace)
 
@@ -132,11 +161,15 @@ class OrmModelMeta(ModelMetaclass):
 
         columns = {}
         for column_name, namespace_value in new_namespace.items():
-            if not is_valid_column_name(column_name) or not is_valid_column_value(namespace_value):
+            if not is_valid_column_name(column_name) or not is_valid_column_value(
+                namespace_value
+            ):
                 continue
             if column_name not in annotations:
                 raise OrmException(f'Unannotated field {column_name}')
-            column, value = construct_column(column_name, annotations[column_name], namespace_value)
+            column, value = construct_column(
+                column_name, annotations[column_name], namespace_value
+            )
             columns[column.name] = column
             new_namespace[column_name] = value
         for column_name, annotation in annotations.items():
@@ -149,15 +182,18 @@ class OrmModelMeta(ModelMetaclass):
         all_columns.update(columns)
 
         # Hack for generating FastAPI models
-        if len(bases) == 1 and \
-                issubclass((base := bases[0]), OrmModel) and \
-                base is not OrmModel and \
-                base.__name__ == name:
+        if (
+            len(bases) == 1
+            and issubclass((base := bases[0]), OrmModel)
+            and base is not OrmModel
+            and base.__name__ == name
+        ):
             stack = traceback.extract_stack()
             if len(stack) >= 3:
                 caller = stack[-3]
-                if caller.name == 'create_cloned_field' and \
-                        caller.filename.endswith(f'{os.sep}fastapi{os.sep}utils.py'):
+                if caller.name == 'create_cloned_field' and caller.filename.endswith(
+                    f'{os.sep}fastapi{os.sep}utils.py'
+                ):
                     return ModelMetaclass(name, (BaseModel,), base.get_namespace())
 
         new_namespace['__abstract__'] = abstract
@@ -169,8 +205,12 @@ class OrmModelMeta(ModelMetaclass):
         else:
             if sum([x.primary_key for x in all_columns.values()]) != 1:
                 raise OrmException('Model should have exactly one primary key')
-            new_namespace['__pkey_name__'] = [x.name for x in all_columns.values() if x.primary_key][0]
-            new_namespace['__table__'] = table = Table(table_name, metadata, *all_columns.values())
+            new_namespace['__pkey_name__'] = [
+                x.name for x in all_columns.values() if x.primary_key
+            ][0]
+            new_namespace['__table__'] = table = Table(
+                table_name, metadata, *all_columns.values()
+            )
             new_namespace['c'] = table.c
         new_namespace['__relations__'] = relation_namespace
 
@@ -227,19 +267,35 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         self._init_private_attributes()
 
     # pylint: disable=unsubscriptable-object, too-many-arguments
-    def _iter(self, to_dict: bool = False, by_alias: bool = False,
-              include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-              exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None, exclude_unset: bool = False,
-              exclude_defaults: bool = False, exclude_none: bool = False) -> 'TupleGenerator':
+    def _iter(
+        self,
+        to_dict: bool = False,
+        by_alias: bool = False,
+        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+    ) -> 'TupleGenerator':
         exclude_private = EXCLUDE_KEYS
         if exclude is None:
             exclude = exclude_private
-        elif isinstance(exclude, Mapping):  # pylint: disable=isinstance-second-argument-not-valid-type
+        elif isinstance(
+            exclude, Mapping
+        ):  # pylint: disable=isinstance-second-argument-not-valid-type
             exclude = dict(exclude)
             exclude.update({k: ... for k in exclude_private})
         else:
             exclude |= exclude_private
-        return super()._iter(to_dict, by_alias, include, exclude, exclude_unset, exclude_defaults, exclude_none)
+        return super()._iter(
+            to_dict,
+            by_alias,
+            include,
+            exclude,
+            exclude_unset,
+            exclude_defaults,
+            exclude_none,
+        )
 
     @property
     def pkey_column(self):
@@ -273,8 +329,11 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         m = cls.__new__(cls)
         if m.__abstract__:
             raise OrmException('Can\'t instantiate abstract model')
-        fields_values = {name: field.get_default() for name, field in cls.__fields__.items() if
-                         not field.required and field.name not in EXCLUDE_KEYS}
+        fields_values = {
+            name: field.get_default()
+            for name, field in cls.__fields__.items()
+            if not field.required and field.name not in EXCLUDE_KEYS
+        }
         fields_values.update(values)
         object.__setattr__(m, '__dict__', fields_values)
         object.__setattr__(m, '__fields_set__', set(values.keys()))
@@ -300,8 +359,7 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
             fields = self.dict(include=self.__modified__)
             # pylint: disable=access-member-before-definition
             await FoxOrm.db.execute(
-                table.update().where(self.pkey_column == self.pkey_value),
-                fields
+                table.update().where(self.pkey_column == self.pkey_value), fields
             )
             self.__modified__.clear()
         else:
@@ -310,7 +368,9 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
                 data[pkey_name] = self.pkey_value
             # pylint: disable=attribute-defined-outside-init
             if not isinstance(FoxOrm.db.connection()._backend, SQLiteBackend):
-                self.pkey_value = await FoxOrm.db.fetch_val(table.insert().returning(self.pkey_column), data)
+                self.pkey_value = await FoxOrm.db.fetch_val(
+                    table.insert().returning(self.pkey_column), data
+                )
             else:
                 self.pkey_value = await FoxOrm.db.execute(table.insert().values(**data))
             self.__bound__ = True
@@ -338,10 +398,18 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return query
 
     @classmethod
-    async def select(cls: Type[MODEL], where, values: dict = None, *,
-                     order_by=None, skip_parsing=False) -> Optional[MODEL]:
+    async def select(
+        cls: Type[MODEL],
+        where,
+        values: dict = None,
+        *,
+        order_by=None,
+        skip_parsing=False,
+    ) -> Optional[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
-        res = await FoxOrm.db.fetch_one(cls._generate_query(where, order_by, None, None), values)
+        res = await FoxOrm.db.fetch_one(
+            cls._generate_query(where, order_by, None, None), values
+        )
         if not res:
             return None
         res = construct_func(res)
@@ -349,10 +417,20 @@ class OrmModel(BaseModel, metaclass=OrmModelMeta):
         return res
 
     @classmethod
-    async def select_all(cls: Type[MODEL], where=None, values: dict = None, *,
-                         order_by=None, limit=None, offset=None, skip_parsing=False) -> List[MODEL]:
+    async def select_all(
+        cls: Type[MODEL],
+        where=None,
+        values: dict = None,
+        *,
+        order_by=None,
+        limit=None,
+        offset=None,
+        skip_parsing=False,
+    ) -> List[MODEL]:
         construct_func = cls.construct if skip_parsing else cls.parse_obj
-        q_res = await FoxOrm.db.fetch_all(cls._generate_query(where, order_by, limit, offset), values)
+        q_res = await FoxOrm.db.fetch_all(
+            cls._generate_query(where, order_by, limit, offset), values
+        )
         res = []
         for x in q_res:
             res.append(construct_func(x))
