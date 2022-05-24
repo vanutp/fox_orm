@@ -4,7 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Extra
 
 from fox_orm import FoxOrm, OrmModel
-from fox_orm.fields import pk
+from fox_orm.column.flags import pk
 from fox_orm.relations import ManyToMany, OneToMany
 
 
@@ -51,14 +51,6 @@ class D(OrmModel):
 class E(OrmModel):
     pkey: Optional[int] = pk
     dt: datetime.datetime
-
-
-class ExtraFields(OrmModel):
-    class Config:
-        extra = Extra.allow
-
-    pkey: Optional[int] = pk
-    _test: str
 
 
 FoxOrm.init_relations()

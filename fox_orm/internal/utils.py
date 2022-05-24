@@ -1,30 +1,51 @@
-import importlib
 import re
-from typing import Type, Tuple, Optional, TYPE_CHECKING
+import types
+import typing
+from typing import Type, Any
 
-from pydantic import ValidationError, Extra, ConfigError, ExtraError, MissingError
-from pydantic.error_wrappers import ErrorWrapper
-from pydantic.typing import ForwardRef
-from pydantic.utils import ROOT_KEY, GetterDict
-
-from fox_orm.internal.const import EXCLUDE_KEYS
-
-if TYPE_CHECKING:
-    from fox_orm.model import OrmModel
-    from pydantic.types import (
-        ModelOrDc,
-    )  # pylint: disable=no-name-in-module,ungrouped-imports
-    from pydantic.typing import (
-        DictStrAny,
-        SetStr,
-    )  # pylint: disable=no-name-in-module,ungrouped-imports
+from sqlalchemy.sql.type_api import TypeEngine
 
 
-def full_import(name):
-    mod, attr = name.rsplit('.', 1)
-    mod = importlib.import_module(mod)
-    mod = getattr(mod, attr)
-    return mod
+def try_index(lst: list, item: Any) -> int | None:
+    try:
+        return lst.index(item)
+    except ValueError:
+        return None
+
+
+def lenient_issubclass(
+    cls: Any, class_or_tuple: Type[Any] | tuple[Type[Any], ...] | None
+) -> bool:
+    return isinstance(cls, type) and issubclass(cls, class_or_tuple)
+
+
+def is_sqla_type(type_: Type[Any]) -> bool:
+    return lenient_issubclass(type_, TypeEngine) or isinstance(type_, TypeEngine)
+
+
+class _UnsupportedType:
+    pass
+
+
+UNSUPPORTED_TYPE = _UnsupportedType()
+
+
+# returns (type, required)
+def parse_type(type_: Type[Any]) -> tuple[Type[Any] | _UnsupportedType, bool]:
+    origin = typing.get_origin(type_)
+    if origin is None:
+        return type_, True
+    if (
+        origin is types.UnionType
+        or origin is typing.Union
+        and len((args := typing.get_args(type_))) == 2
+        and (none_idx := try_index(args, type(None))) is not None
+    ):
+        res, _ = parse_type(args[1 - none_idx])
+        return res, False
+    if any(origin is x for x in (list, set, dict)):
+        return origin, True
+    return UNSUPPORTED_TYPE, True
 
 
 class OptionalAwaitable:
@@ -37,108 +58,7 @@ class OptionalAwaitable:
         return self.func(*self.args, **self.kwargs).__await__()
 
 
-_missing = object()
-
-
-# pylint: disable=fixme
-# TODO: add tests
-def validate_model(
-    model: Type['OrmModel'], input_data: 'DictStrAny', cls: 'ModelOrDc' = None
-) -> Tuple['DictStrAny', 'SetStr', Optional[ValidationError]]:
-    # pylint: disable=R,E
-    """
-    validate data against a model.
-    """
-    values = {}
-    errors = []
-    # input_data names, possibly alias
-    names_used = set()
-    # field names, never aliases
-    fields_set = set()
-    config = model.__config__
-    check_extra = config.extra is not Extra.ignore
-    cls_ = cls or model
-
-    for validator in model.__pre_root_validators__:
-        try:
-            input_data = validator(cls_, input_data)
-        except (ValueError, TypeError, AssertionError) as exc:
-            return {}, set(), ValidationError([ErrorWrapper(exc, loc=ROOT_KEY)], cls_)
-
-    for name, field in model.__fields__.items():
-        if name in EXCLUDE_KEYS and name != model.__pkey_name__:
-            values[name] = field.default
-            continue
-        if field.type_.__class__ == ForwardRef:
-            raise ConfigError(
-                f'field "{field.name}" not yet prepared so type is still a ForwardRef, '
-                f'you might need to call {cls_.__name__}.update_forward_refs().'
-            )
-
-        value = input_data.get(field.alias, _missing)
-        using_name = False
-        if (
-            value is _missing
-            and config.allow_population_by_field_name
-            and field.alt_alias
-        ):
-            value = input_data.get(field.name, _missing)
-            using_name = True
-
-        if value is _missing:
-            if field.required:
-                errors.append(ErrorWrapper(MissingError(), loc=field.alias))
-                continue
-
-            value = field.get_default()
-
-            if not config.validate_all and not field.validate_always:
-                values[name] = value
-                continue
-        else:
-            fields_set.add(name)
-            if check_extra:
-                names_used.add(field.name if using_name else field.alias)
-
-        if not issubclass(field.type_, str) and value == 'null':
-            value = None
-
-        v_, errors_ = field.validate(value, values, loc=field.alias, cls=cls_)
-        if isinstance(errors_, ErrorWrapper):
-            errors.append(errors_)
-        elif isinstance(errors_, list):
-            errors.extend(errors_)
-        else:
-            values[name] = v_
-
-    if check_extra:
-        if isinstance(input_data, GetterDict):
-            extra = input_data.extra_keys() - names_used
-        else:
-            extra = input_data.keys() - names_used
-        if extra:
-            fields_set |= extra
-            if config.extra is Extra.allow:
-                for f in extra:
-                    values[f] = input_data[f]
-            else:
-                for f in sorted(extra):
-                    errors.append(ErrorWrapper(ExtraError(), loc=f))
-
-    for skip_on_failure, validator in model.__post_root_validators__:
-        if skip_on_failure and errors:
-            continue
-        try:
-            values = validator(cls_, values)
-        except (ValueError, TypeError, AssertionError) as exc:
-            errors.append(ErrorWrapper(exc, loc=ROOT_KEY))
-
-    if errors:
-        return values, fields_set, ValidationError(errors, cls_)
-    else:
-        return values, fields_set, None
-
-
+# https://stackoverflow.com/a/28238047
 # noinspection PyMethodOverriding,PyArgumentList,PyUnresolvedReferences,PyPep8Naming
 # pylint: disable=invalid-name,no-member
 class class_or_instancemethod(classmethod):
@@ -147,6 +67,7 @@ class class_or_instancemethod(classmethod):
         return descr_get(instance, type_)
 
 
+# https://stackoverflow.com/a/1176023
 CAMEL_TO_SNAKE_PAT1 = re.compile(r'(.)([A-Z][a-z]+)')
 CAMEL_TO_SNAKE_PAT2 = re.compile(r'([a-z0-9])([A-Z])')
 
@@ -156,6 +77,13 @@ def camel_to_snake(name):
     return CAMEL_TO_SNAKE_PAT2.sub(r'\1_\2', name).lower()
 
 
-class NonInstantiable:
-    def __new__(cls, *args, **kwargs):
-        raise TypeError(f'Object of type {cls.__qualname__} is not instantiable')
+__all__ = [
+    'try_index',
+    'lenient_issubclass',
+    'is_sqla_type',
+    'UNSUPPORTED_TYPE',
+    'parse_type',
+    'OptionalAwaitable',
+    'class_or_instancemethod',
+    'camel_to_snake',
+]

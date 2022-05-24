@@ -5,6 +5,9 @@ description = "Simple databases based ORM with pythonic syntax"
 authors = ["vanutp <hello@vanutp.dev>"]
 license = "MIT"
 
+[tool.black]
+skip-string-normalization = true
+
 [tool.poetry.dependencies]
 python = "^3.9"
 databases = "^0.5.3"

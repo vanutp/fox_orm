@@ -1,29 +1,30 @@
 import json as json_mod
+from abc import abstractmethod, ABC
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import JSON, BigInteger, ForeignKey
-from sqlalchemy.dialects.postgresql import JSONB
-
-from fox_orm.internal.columns import FieldType, ColumnArgument, ColumnFlag
+from sqlalchemy import ForeignKey
 
 
-# noinspection PyPep8Naming
-# pylint: disable=invalid-name
-class int64(int, FieldType):
-    sql_type = BigInteger
+class ColumnArgument(ABC):
+    @abstractmethod
+    def apply(self, args: list, kwargs: dict) -> None:
+        ...
 
 
-# noinspection PyPep8Naming
-# pylint: disable=invalid-name
-class json(FieldType):
-    sql_type = JSON(none_as_null=True)
+class ColumnFlag(ColumnArgument):
+    key: str
+    inverse: bool
 
+    def __init__(self, key: str, inverse: bool = False):
+        self.key = key
+        self.inverse = inverse
 
-# noinspection PyPep8Naming
-# pylint: disable=invalid-name
-class jsonb(FieldType):
-    sql_type = JSONB(none_as_null=True)
+    def __invert__(self):
+        return ColumnFlag(self.key, not self.inverse)
+
+    def apply(self, args: list, kwargs: dict):
+        kwargs[self.key] = not self.inverse
 
 
 # noinspection PyPep8Naming
@@ -65,14 +66,13 @@ unique = ColumnFlag('unique')
 index = ColumnFlag('index')
 
 __all__ = [
-    'int64',
-    'json',
-    'jsonb',
+    'ColumnArgument',
+    'ColumnFlag',
     'default',
+    'fkey',
     'null',
     'pk',
     'autoincrement',
     'unique',
-    'fkey',
     'index',
 ]

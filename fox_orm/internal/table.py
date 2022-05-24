@@ -1,43 +1,27 @@
 import typing
-from types import FunctionType
-from typing import Type, Tuple
 
-from pydantic import BaseConfig
-from pydantic.fields import ModelField, FieldInfo, Field
-from pydantic.utils import lenient_issubclass
 from sqlalchemy import Column
 
-from fox_orm.fields import default as arg_default
+from fox_orm.column import ColumnArgument
+from fox_orm.column.types import PY_SQL_TYPES_MAPPING
 from fox_orm.exceptions import OrmException
-from fox_orm.internal.columns import FieldType, ColumnArgument
-from fox_orm.internal.const import PY_SQL_TYPES_MAPPING
+from fox_orm.internal.utils import (
+    lenient_issubclass,
+    parse_type,
+    is_sqla_type,
+    UNSUPPORTED_TYPE,
+)
 
 
-def parse_type(type_: Type):
-    class Config(BaseConfig):
-        arbitrary_types_allowed = True
-
-    parsed = ModelField(
-        name='', type_=type_, model_config=Config, class_validators=None
-    )
-    return parsed.outer_type_, parsed.required
-
-
-MISSING = object()
-
-
-# pylint: disable=too-many-branches
-def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
+def construct_column(name, annotation, args) -> Column:
     if not isinstance(args, tuple):
         args = (args,)
 
     final_type = None
     parsed_type, required = parse_type(annotation)
     parsed_type = typing.get_origin(parsed_type) or parsed_type
-    if lenient_issubclass(parsed_type, FieldType):
-        # false positive
-        # pylint: disable=no-member
-        final_type = parsed_type.sql_type
+    if is_sqla_type(parsed_type):
+        final_type = parsed_type
     elif parsed_type in PY_SQL_TYPES_MAPPING:
         final_type = PY_SQL_TYPES_MAPPING[parsed_type]
     else:
@@ -50,33 +34,29 @@ def construct_column(name, annotation, args) -> Tuple[Column, FieldInfo]:
     if required:
         column_kwargs['nullable'] = False
 
-    value = Field()
-
     type_specified_via_arg = False
     for arg in args:
-        if lenient_issubclass(arg, FieldType) or arg in PY_SQL_TYPES_MAPPING:
+        if is_sqla_type(arg) or arg in PY_SQL_TYPES_MAPPING:
             if type_specified_via_arg:
                 raise OrmException('More than one type specified in arguments')
             type_specified_via_arg = True
-        if lenient_issubclass(arg, FieldType):
-            final_type = arg.sql_type
-        elif arg in PY_SQL_TYPES_MAPPING:
-            final_type = PY_SQL_TYPES_MAPPING[arg]
+            if is_sqla_type(arg):
+                final_type = arg
+            elif arg in PY_SQL_TYPES_MAPPING:
+                final_type = PY_SQL_TYPES_MAPPING[arg]
 
         elif isinstance(arg, ColumnArgument):
-            if isinstance(arg, arg_default):
-                if isinstance(arg.value, FunctionType):
-                    value = Field(default_factory=arg.value)
-                else:
-                    value = Field(default=arg.value)
-
             arg.apply(column_args, column_kwargs)
         else:
             raise OrmException(
-                f'Argument {arg} has unknown type {type(arg).__qualname__}'
+                f'Argument {arg} has unknown type {parsed_type(arg).__qualname__}'
             )
 
     if final_type is None:
+        if parsed_type is UNSUPPORTED_TYPE:
+            raise OrmException(
+                f'Unsupported type {annotation} specified for column {name}'
+            )
         raise OrmException(f'Bad type specified for column {name}')
 
-    return Column(name, final_type, *column_args, **column_kwargs), value
+    return Column(name, final_type, *column_args, **column_kwargs)

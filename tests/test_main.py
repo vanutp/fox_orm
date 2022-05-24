@@ -5,11 +5,11 @@ from typing import List, Optional, Dict
 
 from sqlalchemy import create_engine, Column, ForeignKey
 
-from fox_orm import FoxOrm
+from fox_orm import FoxOrm, Connection
 from fox_orm.exceptions import *
-from fox_orm.fields import fkey, null, index, autoincrement, unique
+from fox_orm.column.flags import fkey, null, index, autoincrement, unique
 from fox_orm.relations import ManyToMany
-from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, ExtraFields, E
+from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, E
 from tests.utils import schema_to_set
 
 DB_FILE = 'test.db'
@@ -17,20 +17,20 @@ DB_URI = 'sqlite:///test.db'
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
+        FoxOrm.connections['default'] = Connection()
         FoxOrm.init(DB_URI)
-        cls.engine = create_engine(DB_URI)
-        FoxOrm.metadata.create_all(cls.engine)
+        self.engine = create_engine(DB_URI)
+        FoxOrm.metadata.create_all(self.engine)
 
     async def test_table_generation(self):
         from datetime import datetime, date, time, timedelta
         from pydantic import BaseModel
         from sqlalchemy import Integer, Float, String, Boolean, DateTime, Date, Time, Interval, JSON
         from fox_orm import OrmModel
-        from fox_orm.fields import pk
+        from fox_orm.column.flags import pk
 
         class AllTypesHelper(BaseModel):
             a: str
@@ -77,22 +77,19 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             ('foreign_key', Integer),
         }
         self.assertEqual(schema_to_set(AllTypes.__table__), all_types_proper_schema)
-        self.assertFalse(AllTypes.c.pkey.nullable)
-        self.assertTrue(AllTypes.c.int_.nullable)
-        self.assertFalse(AllTypes.c.float_.nullable)
-        self.assertTrue(AllTypes.c.str_.nullable)
-        self.assertTrue(AllTypes.c.bool_.autoincrement)
-        self.assertTrue(AllTypes.c.datetime_.index)
-        self.assertTrue(AllTypes.c.date_.unique)
-        self.assertEqual(list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column, AllTypesRelHelper.c.pkey)
-        self.assertFalse('_test' in ExtraFields.__table__.columns)
-
-        FoxOrm.metadata.create_all(self.engine)
+        self.assertFalse(AllTypes.pkey.nullable)
+        self.assertTrue(AllTypes.int_.nullable)
+        self.assertFalse(AllTypes.float_.nullable)
+        self.assertTrue(AllTypes.str_.nullable)
+        self.assertTrue(AllTypes.bool_.autoincrement)
+        self.assertTrue(AllTypes.datetime_.index)
+        self.assertTrue(AllTypes.date_.unique)
+        self.assertEqual(list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column, AllTypesRelHelper.pkey)
 
     async def test_relationship_generation(self):
         from sqlalchemy import MetaData, Integer
         from fox_orm import OrmModel
-        from fox_orm.fields import pk
+        from fox_orm.column.flags import pk
         from fox_orm.relations import ManyToMany
 
         metadata = MetaData()
@@ -125,7 +122,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         from sqlalchemy.dialects.postgresql import JSONB
         from pydantic import BaseModel
         from fox_orm import OrmModel
-        from fox_orm.fields import pk, jsonb
+        from fox_orm.column.flags import pk, jsonb
 
         metadata = MetaData()
 
@@ -268,7 +265,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_bad_model(self):
         from fox_orm import OrmModel
-        from fox_orm.fields import pk
+        from fox_orm.column.flags import pk
 
         with self.assertRaises(OrmException):
             class BadModel1(OrmModel):
@@ -448,7 +445,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_inheritance(self):
         from sqlalchemy import MetaData, Integer, JSON
         from fox_orm import OrmModel
-        from fox_orm.fields import pk
+        from fox_orm.column.flags import pk
 
         metadata = MetaData()
 
@@ -473,17 +470,14 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_abstract(self):
         from sqlalchemy import MetaData, Integer
         from fox_orm import OrmModel
-        from fox_orm.fields import pk
+        from fox_orm.column.flags import pk
 
-        metadata = MetaData()
+        conn = FoxOrm.connections['test_abstract'] = Connection()
 
-        class Test(OrmModel):
-            __metadata__ = metadata
-            __abstract__ = True
+        class Test(OrmModel, abstract=True, connection=conn):
             pkey: Optional[int] = pk
 
-        class TestInherited(Test):
-            __metadata__ = metadata
+        class TestInherited(Test, connection=conn):
             test: int
 
         proper_schema = {
