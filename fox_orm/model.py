@@ -10,7 +10,8 @@ from fox_orm.exceptions import (
     PrivateColumnError,
     AbstractModelInstantiationError,
     InvalidColumnError,
-    UnboundInstanceError, NoSuchColumnError,
+    UnboundInstanceError,
+    NoSuchColumnError,
 )
 from fox_orm.internal.table import construct_column
 from fox_orm.internal.utils import camel_to_snake
@@ -77,13 +78,13 @@ def generate_columns(bases, annotations, orig_namespace):
 
 class OrmModelMeta(type):
     def __new__(
-            mcs,
-            class_name,
-            bases,
-            orig_namespace,
-            table_name: str | None = None,
-            abstract: bool = False,
-            connection: Connection | str = 'default',
+        mcs,
+        class_name,
+        bases,
+        orig_namespace,
+        table_name: str | None = None,
+        abstract: bool = False,
+        connection: Connection | str = 'default',
     ):
         if not bases:
             return super().__new__(mcs, class_name, bases, orig_namespace)
@@ -241,13 +242,17 @@ class OrmModel(metaclass=OrmModelMeta):
     async def get(cls: Type[MODEL], *args, **kwargs) -> MODEL:
         if kwargs:
             if args:
-                raise TypeError('Positional and keyword arguments cannot be used together')
+                raise TypeError(
+                    'Positional and keyword arguments cannot be used together'
+                )
             if list(kwargs.keys()) != [x.name for x in cls.__pkeys__]:
                 raise ValueError('Values passed to .get must be primary keys')
             query = cls.select().where(**kwargs)
         else:
             if len(args) != len(cls.__pkeys__):
-                raise ValueError('Number of values passed to .get must match the number of primary keys')
+                raise ValueError(
+                    'Number of values passed to .get must match the number of primary keys'
+                )
             query = cls.select()
             for col, val in zip(cls.__pkeys__, args):
                 query = query.where(col == val)
@@ -277,9 +282,7 @@ class OrmModel(metaclass=OrmModelMeta):
         self.__ensure_bound()
         db = self.__connection__.db
         table = self.__table__
-        res = await db.fetch_val(
-            table.delete().where(self.__pkey_condition)
-        )
+        res = await db.fetch_val(table.delete().where(self.__pkey_condition))
         self.__bound = False
         return res
 

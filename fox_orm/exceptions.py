@@ -13,9 +13,7 @@ class UnannotatedFieldError(ModelCreationError):
 
 class PrivateColumnError(ModelCreationError):
     def __init__(self, field_name: str):
-        super().__init__(
-            f'Column names cannot start with _ (got {field_name!r})'
-        )
+        super().__init__(f'Column names cannot start with _ (got {field_name!r})')
 
 
 class NoPrimaryKeyError(ModelCreationError):

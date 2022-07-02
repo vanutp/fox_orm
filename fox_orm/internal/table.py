@@ -5,7 +5,12 @@ from sqlalchemy import Column
 
 from fox_orm.column import ColumnArgument
 from fox_orm.column.types import PY_SQL_TYPES_MAPPING
-from fox_orm.exceptions import OrmError, MultipleTypesError, UnsupportedTypeError, NoTypeError
+from fox_orm.exceptions import (
+    OrmError,
+    MultipleTypesError,
+    UnsupportedTypeError,
+    NoTypeError,
+)
 from fox_orm.internal.utils import (
     lenient_issubclass,
     parse_type,
@@ -49,9 +54,7 @@ def construct_column(name: str, annotation: Any, args: Any) -> Column:
         elif isinstance(arg, ColumnArgument):
             arg.apply(column_args, column_kwargs)
         else:
-            raise OrmError(
-                f'Argument {arg} has unknown type {type(arg).__qualname__}'
-            )
+            raise OrmError(f'Argument {arg} has unknown type {type(arg).__qualname__}')
 
     if final_type is None:
         if parsed_type is UNSUPPORTED_TYPE:
