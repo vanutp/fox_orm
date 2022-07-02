@@ -5,18 +5,20 @@ from sqlalchemy import MetaData
 class Connection:
     _db: Database | None
     _metadata: MetaData
-    db: Database | None
-    metadata: MetaData
 
     def __init__(self):
         self._db = None
         self._metadata = MetaData()
 
     def init(self, db_url: str, **db_options):
+        if self._db:
+            raise ValueError('Connection already initialized')
         self._db = Database(db_url, **db_options)
 
     @property
-    def db(self) -> Database:
+    def db(self) -> Database | None:
+        if not self._db:
+            raise ValueError('Connection not initialized, call .init first')
         return self._db
 
     @property

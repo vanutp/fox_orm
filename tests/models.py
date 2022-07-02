@@ -8,19 +8,20 @@ from fox_orm.column.flags import pk
 from fox_orm.relations import ManyToMany, OneToMany
 
 
-class RecursiveTest2(BaseModel):
+class PydanticTest2(BaseModel):
     a: str
 
 
-class RecursiveTest(BaseModel):
-    a: List[RecursiveTest2]
+class PydanticTest(BaseModel):
+    a: List[PydanticTest2]
+    b: int
 
 
 class A(OrmModel):
     pkey: Optional[int] = pk
     text: str
     n: int
-    recursive: Optional[RecursiveTest]
+    pydantic: Optional[PydanticTest]
 
     b_objs: ManyToMany['B'] = ManyToMany(to='tests.models.B', via='mid')
 

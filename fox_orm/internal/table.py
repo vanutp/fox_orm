@@ -1,10 +1,11 @@
 import typing
+from typing import Any
 
 from sqlalchemy import Column
 
 from fox_orm.column import ColumnArgument
 from fox_orm.column.types import PY_SQL_TYPES_MAPPING
-from fox_orm.exceptions import OrmException
+from fox_orm.exceptions import OrmError, MultipleTypesError, UnsupportedTypeError, NoTypeError
 from fox_orm.internal.utils import (
     lenient_issubclass,
     parse_type,
@@ -13,7 +14,7 @@ from fox_orm.internal.utils import (
 )
 
 
-def construct_column(name, annotation, args) -> Column:
+def construct_column(name: str, annotation: Any, args: Any) -> Column:
     if not isinstance(args, tuple):
         args = (args,)
 
@@ -38,7 +39,7 @@ def construct_column(name, annotation, args) -> Column:
     for arg in args:
         if is_sqla_type(arg) or arg in PY_SQL_TYPES_MAPPING:
             if type_specified_via_arg:
-                raise OrmException('More than one type specified in arguments')
+                raise MultipleTypesError(name)
             type_specified_via_arg = True
             if is_sqla_type(arg):
                 final_type = arg
@@ -48,15 +49,13 @@ def construct_column(name, annotation, args) -> Column:
         elif isinstance(arg, ColumnArgument):
             arg.apply(column_args, column_kwargs)
         else:
-            raise OrmException(
-                f'Argument {arg} has unknown type {parsed_type(arg).__qualname__}'
+            raise OrmError(
+                f'Argument {arg} has unknown type {type(arg).__qualname__}'
             )
 
     if final_type is None:
         if parsed_type is UNSUPPORTED_TYPE:
-            raise OrmException(
-                f'Unsupported type {annotation} specified for column {name}'
-            )
-        raise OrmException(f'Bad type specified for column {name}')
+            raise UnsupportedTypeError(annotation, name)
+        raise NoTypeError(name)
 
     return Column(name, final_type, *column_args, **column_kwargs)

@@ -1,29 +1,49 @@
 import datetime
-import os
 import unittest
+from time import sleep
 from typing import List, Optional, Dict
 
-from sqlalchemy import create_engine, Column, ForeignKey
-
+import sqlalchemy.engine
 from fox_orm import FoxOrm, Connection
-from fox_orm.exceptions import *
 from fox_orm.column.flags import fkey, null, index, autoincrement, unique
+from fox_orm.exceptions import *
 from fox_orm.relations import ManyToMany
-from tests.models import A, B, C, D, RecursiveTest, RecursiveTest2, E
-from tests.utils import schema_to_set
-
-DB_FILE = 'test.db'
-DB_URI = 'sqlite:///test.db'
+from sqlalchemy import create_engine
+from tests.models import A, B, C, D, PydanticTest, PydanticTest2, E
+from tests.utils import schema_to_set, port_occupied, start_postgres, stop_container, try_connect_postgres
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        if os.path.exists(DB_FILE):
-            os.remove(DB_FILE)
-        FoxOrm.connections['default'] = Connection()
-        FoxOrm.init(DB_URI)
-        self.engine = create_engine(DB_URI)
-        FoxOrm.metadata.create_all(self.engine)
+    engine: sqlalchemy.engine.Engine
+    postgres_container_id: str
+
+    @classmethod
+    def setUpClass(cls):
+        port = 5433
+        while port_occupied(port):
+            port += 1
+        cls.postgres_container_id = start_postgres(port)
+        try:
+            db_uri = f'postgresql://postgres:postgres@localhost:{port}/postgres'
+            sleep(3)
+            while not try_connect_postgres(db_uri):
+                sleep(0.01)
+            FoxOrm.init(db_uri)
+            cls.engine = create_engine(db_uri)
+            FoxOrm.metadata.create_all(cls.engine)
+        except:
+            stop_container(cls.postgres_container_id)
+            raise
+
+    async def asyncSetUp(self):
+        await FoxOrm.connect()
+
+    async def asyncTearDown(self):
+        await FoxOrm.disconnect()
+
+    @classmethod
+    def tearDownClass(cls):
+        stop_container(cls.postgres_container_id)
 
     async def test_table_generation(self):
         from datetime import datetime, date, time, timedelta
@@ -163,24 +183,60 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(inst.dt, dt)
 
     async def test_select(self):
-        inst = A(text='test_select', n=0)
-        await inst.save()
-        inst = await A.select(A.c.text == 'test_select')
-        self.assertIsNotNone(inst)
-        self.assertEqual(inst.text, 'test_select')
+        inst1 = await A(text='test_select_1', n=0).save()
+        inst2 = await A(text='test_select_2', n=2).save()
+        inst3 = await A(text='test_select_3', n=4).save()
+
+        selected = await A.select(A.text == 'test_select_2').all()
+        self.assertEqual(len(selected), 1)
+        selected = selected[0]
+        self.assertEqual(selected.pkey, inst2.pkey)
+        self.assertEqual(selected.text, 'test_select_2')
+
+        selected = await A.select().where(A.text == 'test_select_3').first()
+        self.assertEqual(selected.pkey, inst3.pkey)
+        self.assertEqual(selected.text, 'test_select_3')
+
+        selected = await A.select().where(text='test_select_3').first()
+        self.assertEqual(selected.pkey, inst3.pkey)
+        self.assertEqual(selected.text, 'test_select_3')
+
+        selected = await A.select(A.__table__.select().where(A.text == 'test_select_1')).first()
+        self.assertEqual(selected.pkey, inst1.pkey)
+        self.assertEqual(selected.text, 'test_select_1')
+
+        selected = await A.select().where(A.text.ilike('test\_select\__')).where(A.n >= 2).all()
+        self.assertEqual(len(selected), 2)
+        self.assertEqual({selected[0].pkey, selected[1].pkey}, {inst2.pkey, inst3.pkey})
+
+        selected = await A.select().where(A.text == 'this_does_not_exist').first()
+        self.assertIsNone(selected)
+
+    async def test_select_values(self):
+        inst = await A(text='test_select_values', n=0).save()
+
+        selected = await A.select('select * from a where text = :text').values(text='test_select_values').first()
+        self.assertEqual(selected.pkey, inst.pkey)
+
+        selected = await A.select('select * from a where text = :text').values({'text': 'test_select_values'}).first()
+        self.assertEqual(selected.pkey, inst.pkey)
 
     async def test_update(self):
-        a_inst = A(text='test_update', n=0)
-        await a_inst.save()
-        a_inst.text = 'test_update2'
-        await a_inst.save()
-        a_inst = await A.select(A.c.text == 'test_update2')
-        self.assertIsNotNone(a_inst)
+        inst = A(text='test_update', n=0)
+        await inst.save()
+        inst.text = 'test_update2'
+        await inst.save()
+        selected = await A.select(A.text == 'test_update2').first()
+        self.assertEqual(selected.text, 'test_update2')
 
     async def test_empty_update(self):
-        inst = A(text='test_empty_update', n=0)
+        inst = A(text='test_empty_update', n=1874)
         await inst.save()
         await inst.save()
+        selected = await A.select(A.text == 'test_empty_update').first()
+        self.assertEqual(selected.pkey, inst.pkey)
+        self.assertEqual(selected.text, 'test_empty_update')
+        self.assertEqual(selected.n, 1874)
 
     async def test_m2m(self):
         a_inst = A(text='test_m2m', n=0)
@@ -198,7 +254,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         a_inst = A(text='test_m2m_2', n=0)
         await a_inst.save()
         b_inst = B(text2='test_m2m_2_bad', n=0)
-        with self.assertRaises(OrmException):
+        with self.assertRaises(OrmError):
             a_inst.b_objs.add(b_inst)
 
         for i in range(10):
@@ -258,89 +314,50 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await a_inst.save()
         with self.assertRaises(ValueError):
             a_inst.b_objs = 1874
-        with self.assertRaises(OrmException):
+        with self.assertRaises(OrmError):
             a_inst.pkey = 1874
-        with self.assertRaises(OrmException):
+        with self.assertRaises(OrmError):
             await a_inst.fetch_related('pkey')
 
     async def test_bad_model(self):
         from fox_orm import OrmModel
         from fox_orm.column.flags import pk
 
-        with self.assertRaises(OrmException):
+        with self.assertRaises(NoPrimaryKeyError):
             class BadModel1(OrmModel):
                 pass
-        with self.assertRaises(OrmException):
+        with self.assertRaises(UnannotatedFieldError):
             class BadModel2(OrmModel):
                 pkey: Optional[int] = pk
                 kur = '123'
-        with self.assertRaises(OrmException):
+        with self.assertRaises(PrivateFieldError):
             class BadModel3(OrmModel):
-                __sqla_table__ = 'bad_model_3'
+                __ukur__ = 'bad_model_3'
                 pkey: Optional[int] = pk
-        with self.assertRaises(OrmException):
+        with self.assertRaises(PrivateFieldError):
             class BadModel4(OrmModel):
-                __table__ = 'bad_model_4'
+                __ukur = 'bad_model_4'
                 pkey: Optional[int] = pk
-        with self.assertRaises(OrmException):
-            class BadModel5(OrmModel):
-                __tablename__ = 123
-                pkey: Optional[int] = pk
-        with self.assertRaises(OrmException):
-            class BadModel6(OrmModel):
-                __metadata__ = 123
-                pkey: Optional[int] = pk
-        with self.assertRaises(OrmException):
-            class BadModel7(OrmModel):
-                pkey: Optional[int] = pk
-                id2: Optional[int] = pk
-        with self.assertRaises(OrmException) as exc:
-            class BadModel8(OrmModel):
-                pass
 
     async def test_select_all(self):
         for i in range(10):
             inst = A(text='test_select_all', n=1874)
             await inst.save()
 
-        objs: List[A] = await A.select_all(A.c.n == 1874)
+        objs = await A.select().where(A.text == 'test_select_all').all()
         self.assertEqual(len(objs), 10)
         for obj in objs:
-            self.assertEqual(obj.text, 'test_select_all')
-
-    async def test_select_nonexistent(self):
-        res = await A.select_all(A.c.text == 'test_select_nonexistent')
-        self.assertEqual(len(res), 0)
-        res = await A.select(A.c.text == 'test_select_nonexistent')
-        self.assertIsNone(res)
-        res = await A.exists(A.c.text == 'test_select_nonexistent')
-        self.assertFalse(res)
-
-    async def test_exists(self):
-        a_inst = A(text='test_exists', n=0)
-        await a_inst.save()
-        res = await A.exists(A.c.text == 'test_exists')
-        self.assertTrue(res)
-
-    async def test_count(self):
-        for i in range(10):
-            inst = A(text='test_count', n=1875)
-            await inst.save()
-        res = await A.count(A.c.n == 1875)
-        self.assertEqual(res, 10)
+            self.assertEqual(obj.n, 1874)
 
     async def test_order_by(self):
         for i in range(10):
-            inst = A(text='test_order_by', n=i)
-            await inst.save()
+            await A(text='test_order_by', n=i).save()
 
-        objs: List[A] = await A.select_all(A.c.text == 'test_order_by', order_by=A.c.n)
+        objs = await A.select().where(A.text == 'test_order_by').order_by(A.n).all()
         self.assertEqual(len(objs), 10)
-        i = 0
-        for obj in objs:
+        for i, obj in enumerate(objs):
             self.assertEqual(obj.text, 'test_order_by')
             self.assertEqual(obj.n, i)
-            i += 1
 
     async def test_delete(self):
         for i in range(10):
@@ -416,46 +433,24 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await inst_2.save()
         await A.get(1875)
 
-    async def test_recursive_serialization(self):
-        inst = A(text='test_recursive_serialization', n=1)
+    async def test_pydantic_support(self):
+        inst = A(text='test_pydantic_support', n=1)
         await inst.save()
-        inst.recursive = RecursiveTest(a=[RecursiveTest2(a='123')])
+        inst.pydantic = PydanticTest(a=[PydanticTest2(a='123')])
         await inst.save()
-
-    async def test_extra_fields(self):
-        inst = ExtraFields()
-        inst._test = 123
-        await inst.save()
-        inst = await ExtraFields.get(inst.pkey)
-
-    async def test_select_sqla_core(self):
-        inst = A(text='test_select_sqla_core', n=0)
-        await inst.save()
-        inst = await A.select(A.__table__.select().where(A.c.text == 'test_select_sqla_core'))
-        self.assertIsNotNone(inst)
-        self.assertEqual(inst.text, 'test_select_sqla_core')
-
-    async def test_select_raw_sql(self):
-        inst = A(text='test_select_raw_sql', n=0)
-        await inst.save()
-        inst = await A.select('''select * from a where text = :text''', {'text': 'test_select_raw_sql'})
-        self.assertIsNotNone(inst)
-        self.assertEqual(inst.text, 'test_select_raw_sql')
 
     async def test_inheritance(self):
-        from sqlalchemy import MetaData, Integer, JSON
+        from sqlalchemy import Integer, JSON
         from fox_orm import OrmModel
         from fox_orm.column.flags import pk
 
-        metadata = MetaData()
+        conn = Connection()
 
-        class Test(OrmModel):
-            __metadata__ = metadata
+        class Test(OrmModel, connection=conn):
             pkey: Optional[int] = pk
             test: str
 
-        class TestInherited(Test):
-            __metadata__ = metadata
+        class TestInherited(Test, connection=conn):
             test: int
             test2: dict
 
@@ -468,11 +463,11 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
 
     async def test_abstract(self):
-        from sqlalchemy import MetaData, Integer
+        from sqlalchemy import Integer
         from fox_orm import OrmModel
         from fox_orm.column.flags import pk
 
-        conn = FoxOrm.connections['test_abstract'] = Connection()
+        conn = Connection()
 
         class Test(OrmModel, abstract=True, connection=conn):
             pkey: Optional[int] = pk
@@ -487,19 +482,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(TestInherited.__table__.name, 'test_inherited')
         self.assertEqual(schema_to_set(TestInherited.__table__), proper_schema)
 
-        with self.assertRaises(OrmException):
+        with self.assertRaises(OrmError):
             Test(pkey=123)
-        with self.assertRaises(OrmException):
-            Test.construct({'pkey': 123})
 
         TestInherited(pkey=123, test=456)
-        TestInherited.construct({'pkey': 123, 'test': 456})
-
-    async def test_getattribute(self):
-        self.assertEqual(A.__table__.c.pkey, A.pkey)
-        self.assertEqual(A.__table__.c.text, A.text)
-        self.assertEqual(A.__table__.c.n, A.n)
-        self.assertEqual(A.__table__.c.recursive, A.recursive)
-        self.assertIsInstance(A.b_objs, ManyToMany)
-        self.assertIs(A.b_objs._to, B)
-

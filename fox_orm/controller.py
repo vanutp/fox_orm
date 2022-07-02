@@ -1,40 +1,41 @@
+from databases import Database
 from sqlalchemy import MetaData
 
 from fox_orm.connection import Connection
 
 
-class FoxOrmMeta(type):
+class _FoxOrm:
     connections: dict[str, Connection]
 
-    def __init__(cls, *args, **kwargs):
-        cls.connections = {'default': Connection()}
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        self.connections = {'default': Connection()}
 
     @property
-    def connection(cls) -> Connection:
-        return cls.connections.get('default')
+    def connection(self) -> Connection:
+        return self.connections.get('default')
 
     @property
-    def metadata(cls) -> MetaData:
-        return cls.connection.metadata
+    def db(self) -> Database:
+        return self.connection.db
 
-    def init(cls, db_url: str, **db_options):
-        if cls.connection.db:
-            raise ValueError('Default connection already initialized')
-        cls.connection.init(db_url, **db_options)
+    @property
+    def metadata(self) -> MetaData:
+        return self.connection.metadata
 
-    async def connect(cls):
-        await cls.connection.connect()
+    def init(self, db_url: str, **db_options):
+        self.connection.init(db_url, **db_options)
 
-    async def disconnect(cls):
-        await cls.connection.disconnect()
+    async def connect(self):
+        await self.connection.connect()
 
-    def init_relations(cls):
+    async def disconnect(self):
+        await self.connection.disconnect()
+
+    def init_relations(self):
         ...
 
 
-class FoxOrm(metaclass=FoxOrmMeta):
-    pass
+FoxOrm = _FoxOrm()
 
 
 __all__ = ['FoxOrm']

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 
 from fox_orm import FoxOrm
-from tests.models import A, RecursiveTest, RecursiveTest2
+from tests.models import A, PydanticTest, PydanticTest2
 
 app = FastAPI()
 
@@ -24,7 +24,7 @@ async def index():
 
 @app.get('/2', response_model=AInherited)
 async def index():
-    a_inst = AInherited(text='test_fastapi_2', n=1, n2=1, recursive=RecursiveTest(a=[RecursiveTest2(a='123')]))
+    a_inst = AInherited(text='test_fastapi_2', n=1, n2=1, recursive=PydanticTest(a=[PydanticTest2(a='123')]))
     await a_inst.save()
     return a_inst
 

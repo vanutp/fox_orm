@@ -58,15 +58,6 @@ class OptionalAwaitable:
         return self.func(*self.args, **self.kwargs).__await__()
 
 
-# https://stackoverflow.com/a/28238047
-# noinspection PyMethodOverriding,PyArgumentList,PyUnresolvedReferences,PyPep8Naming
-# pylint: disable=invalid-name,no-member
-class class_or_instancemethod(classmethod):
-    def __get__(self, instance, type_):
-        descr_get = super().__get__ if instance is None else self.__func__.__get__
-        return descr_get(instance, type_)
-
-
 # https://stackoverflow.com/a/1176023
 CAMEL_TO_SNAKE_PAT1 = re.compile(r'(.)([A-Z][a-z]+)')
 CAMEL_TO_SNAKE_PAT2 = re.compile(r'([a-z0-9])([A-Z])')
