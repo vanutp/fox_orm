@@ -3,7 +3,6 @@ from enum import Enum
 from functools import wraps
 from typing import TYPE_CHECKING, TypeVar, Generic, Type, Any, overload
 
-from fox_orm import FoxOrm
 from fox_orm.exceptions import QueryBuiltError, InvalidQueryTypeError
 from sqlalchemy.sql import Select, Delete
 
@@ -65,6 +64,10 @@ class Query(Generic[MODEL]):
         query._values = deepcopy(self._values)
         return query
 
+    @property
+    def _db(self):
+        return self._model.__connection__.db
+
     def _build_query(self) -> Select | Delete:
         if self._built_query is not None:
             return self._built_query
@@ -88,10 +91,12 @@ class Query(Generic[MODEL]):
         if self._built_query is not None:
             raise QueryBuiltError
 
+    @overload
+    def _set_built_query(self, query: Select | Delete | str) -> 'Query[MODEL]':
+        ...
+
     @_builder()
-    def _set_built_query(
-        self: 'Query[MODEL]', query: Select | Delete | str
-    ) -> 'Query[MODEL]':
+    def _set_built_query(self, query: Select | Delete | str):
         if not isinstance(query, str):
             if not isinstance(query, (Select, Delete)):
                 raise TypeError('query must be a Select or Delete object or a string')
@@ -104,7 +109,7 @@ class Query(Generic[MODEL]):
         self._built_query = query
 
     @overload
-    def where(self: 'Query[MODEL]', *args, **kwargs) -> 'Query[MODEL]':
+    def where(self, *args, **kwargs) -> 'Query[MODEL]':
         ...
 
     @_builder()
@@ -119,7 +124,7 @@ class Query(Generic[MODEL]):
             self._where.append(self._model.__table__.c[key] == value)
 
     @overload
-    def order_by(self: 'Query[MODEL]', *args, **kwargs) -> 'Query[MODEL]':
+    def order_by(self, *args, **kwargs) -> 'Query[MODEL]':
         ...
 
     @_builder()
@@ -137,7 +142,7 @@ class Query(Generic[MODEL]):
             self._order_by.append(column.asc() if value == 1 else column.desc())
 
     @overload
-    def limit(self: 'Query[MODEL]', limit: int) -> 'Query[MODEL]':
+    def limit(self, limit: int) -> 'Query[MODEL]':
         ...
 
     @_builder()
@@ -145,7 +150,7 @@ class Query(Generic[MODEL]):
         self._limit = limit
 
     @overload
-    def offset(self: 'Quчery[MODEL]', offset: int) -> 'Query[MODEL]':
+    def offset(self, offset: int) -> 'Query[MODEL]':
         ...
 
     @_builder()
@@ -154,7 +159,7 @@ class Query(Generic[MODEL]):
 
     @overload
     def values(
-        self: 'Query[MODEL]', values: dict[str, Any] | None = None, **kwargs: Any
+        self, values: dict[str, Any] | None = None, **kwargs: Any
     ) -> 'Query[MODEL]':
         ...
 
@@ -174,14 +179,14 @@ class Query(Generic[MODEL]):
         else:
             q = self
         built_query = q._build_query()
-        row = await FoxOrm.db.fetch_one(built_query, q._values)
+        row = await self._db.fetch_one(built_query, q._values)
         if row is None:
             return None
         return self._model._from_row(row)
 
     async def all(self) -> list[MODEL]:
         built_query = self._build_query()
-        rows = await FoxOrm.db.fetch_all(built_query, self._values)
+        rows = await self._db.fetch_all(built_query, self._values)
         return [self._model._from_row(row) for row in rows]
 
 

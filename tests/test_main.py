@@ -7,10 +7,15 @@ import sqlalchemy.engine
 from fox_orm import FoxOrm, Connection
 from fox_orm.column.flags import fkey, null, index, autoincrement, unique
 from fox_orm.exceptions import *
-from fox_orm.relations import ManyToMany
 from sqlalchemy import create_engine
 from tests.models import A, B, C, D, PydanticTest, PydanticTest2, E
-from tests.utils import schema_to_set, port_occupied, start_postgres, stop_container, try_connect_postgres
+from tests.utils import (
+    schema_to_set,
+    port_occupied,
+    start_postgres,
+    stop_container,
+    try_connect_postgres,
+)
 
 
 class TestMain(unittest.IsolatedAsyncioTestCase):
@@ -48,7 +53,17 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_table_generation(self):
         from datetime import datetime, date, time, timedelta
         from pydantic import BaseModel
-        from sqlalchemy import Integer, Float, String, Boolean, DateTime, Date, Time, Interval, JSON
+        from sqlalchemy import (
+            Integer,
+            Float,
+            String,
+            Boolean,
+            DateTime,
+            Date,
+            Time,
+            Interval,
+            JSON,
+        )
         from fox_orm import OrmModel
         from fox_orm.column.flags import pk
 
@@ -104,7 +119,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(AllTypes.bool_.autoincrement)
         self.assertTrue(AllTypes.datetime_.index)
         self.assertTrue(AllTypes.date_.unique)
-        self.assertEqual(list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column, AllTypesRelHelper.pkey)
+        self.assertEqual(
+            list(AllTypes.__table__.c.foreign_key.foreign_keys)[0].column,
+            AllTypesRelHelper.pkey,
+        )
 
     async def test_relationship_generation(self):
         from sqlalchemy import MetaData, Integer
@@ -131,40 +149,52 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertIn('mid', metadata.tables)
         self.assertNotIn('b_objs', metadata.tables['rel_a'].columns)
         self.assertNotIn('a_objs', metadata.tables['rel_b'].columns)
-        self.assertEqual(schema_to_set(metadata.tables['mid']),
-                         {
-                             ('rel_a_id', Integer),
-                             ('rel_b_id', Integer),
-                         })
+        self.assertEqual(
+            schema_to_set(metadata.tables['mid']),
+            {
+                ('rel_a_id', Integer),
+                ('rel_b_id', Integer),
+            },
+        )
+
+    async def test_connection(self):
+        from fox_orm import OrmModel
+        from fox_orm.column import pk
+        conn = Connection()
+
+        class TestConnection(OrmModel, connection=conn):
+            pkey: int = pk
+
+        self.assertEqual(TestConnection.__connection__, conn)
 
     async def test_jsonb_generation(self):
-        from sqlalchemy import MetaData, Integer
+        from sqlalchemy import Integer
         from sqlalchemy.dialects.postgresql import JSONB
         from pydantic import BaseModel
         from fox_orm import OrmModel
-        from fox_orm.column.flags import pk, jsonb
+        from fox_orm.column import pk, jsonb
 
-        metadata = MetaData()
+        conn = Connection()
 
         class JsonbTypesHelper(BaseModel):
             a: str
             b: int
 
-        class JsonbTypes(OrmModel):
-            __metadata__ = metadata
+        class JsonbTypes(OrmModel, connection=conn):
             pkey: Optional[int] = pk
             dict_: dict = jsonb
             list_: list = jsonb
             implicit_json: JsonbTypesHelper = jsonb
 
-        self.assertEqual(JsonbTypes.__table__.metadata, metadata)
-        self.assertEqual(schema_to_set(JsonbTypes.__table__),
-                         {
-                             ('pkey', Integer),
-                             ('dict_', JSONB),
-                             ('list_', JSONB),
-                             ('implicit_json', JSONB),
-                         })
+        self.assertEqual(
+            schema_to_set(JsonbTypes.__table__),
+            {
+                ('pkey', Integer),
+                ('dict_', JSONB),
+                ('list_', JSONB),
+                ('implicit_json', JSONB),
+            },
+        )
 
     async def test_insert(self):
         a_inst = A(text='test', n=0)
@@ -201,11 +231,18 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(selected.pkey, inst3.pkey)
         self.assertEqual(selected.text, 'test_select_3')
 
-        selected = await A.select(A.__table__.select().where(A.text == 'test_select_1')).first()
+        selected = await A.select(
+            A.__table__.select().where(A.text == 'test_select_1')
+        ).first()
         self.assertEqual(selected.pkey, inst1.pkey)
         self.assertEqual(selected.text, 'test_select_1')
 
-        selected = await A.select().where(A.text.ilike('test\_select\__')).where(A.n >= 2).all()
+        selected = (
+            await A.select()
+            .where(A.text.ilike('test\_select\__'))
+            .where(A.n >= 2)
+            .all()
+        )
         self.assertEqual(len(selected), 2)
         self.assertEqual({selected[0].pkey, selected[1].pkey}, {inst2.pkey, inst3.pkey})
 
@@ -215,10 +252,24 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     async def test_select_values(self):
         inst = await A(text='test_select_values', n=0).save()
 
-        selected = await A.select('select * from a where text = :text').values(text='test_select_values').first()
+        selected = (
+            await A.select('select * from a where text = :text')
+            .values(text='test_select_values')
+            .first()
+        )
         self.assertEqual(selected.pkey, inst.pkey)
 
-        selected = await A.select('select * from a where text = :text').values({'text': 'test_select_values'}).first()
+        selected = (
+            await A.select('select * from a where text = :text')
+            .values({'text': 'test_select_values'})
+            .first()
+        )
+        self.assertEqual(selected.pkey, inst.pkey)
+
+    async def test_get(self):
+        inst = await A(text='test_get', n=0).save()
+        selected = await A.get(inst.pkey)
+        self.assertIsNotNone(selected)
         self.assertEqual(selected.pkey, inst.pkey)
 
     async def test_update(self):
@@ -227,7 +278,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         inst.text = 'test_update2'
         await inst.save()
         selected = await A.select(A.text == 'test_update2').first()
-        self.assertEqual(selected.text, 'test_update2')
+        self.assertIsNotNone(selected)
 
     async def test_empty_update(self):
         inst = A(text='test_empty_update', n=1874)
@@ -326,15 +377,18 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(NoPrimaryKeyError):
             class BadModel1(OrmModel):
                 pass
+
         with self.assertRaises(UnannotatedFieldError):
             class BadModel2(OrmModel):
                 pkey: Optional[int] = pk
                 kur = '123'
-        with self.assertRaises(PrivateFieldError):
+
+        with self.assertRaises(PrivateColumnError):
             class BadModel3(OrmModel):
                 __ukur__ = 'bad_model_3'
                 pkey: Optional[int] = pk
-        with self.assertRaises(PrivateFieldError):
+
+        with self.assertRaises(PrivateColumnError):
             class BadModel4(OrmModel):
                 __ukur = 'bad_model_4'
                 pkey: Optional[int] = pk
@@ -344,7 +398,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
             inst = A(text='test_select_all', n=1874)
             await inst.save()
 
-        objs = await A.select().where(A.text == 'test_select_all').all()
+        objs = await A.select(A.text == 'test_select_all').all()
         self.assertEqual(len(objs), 10)
         for obj in objs:
             self.assertEqual(obj.n, 1874)
@@ -353,7 +407,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         for i in range(10):
             await A(text='test_order_by', n=i).save()
 
-        objs = await A.select().where(A.text == 'test_order_by').order_by(A.n).all()
+        objs = await A.select(A.text == 'test_order_by').order_by(A.n).all()
         self.assertEqual(len(objs), 10)
         for i, obj in enumerate(objs):
             self.assertEqual(obj.text, 'test_order_by')
@@ -361,18 +415,17 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
 
     async def test_delete(self):
         for i in range(10):
-            inst = A(text='test_delete', n=i)
-            await inst.save()
-        await A.delete(A.c.text == 'test_delete')
-        objs = await A.select_all(A.c.text == 'test_delete')
+            await A(text='test_delete', n=i).save()
+        await A.delete_where(A.text == 'test_delete')
+        objs = await A.select(A.text == 'test_delete').all()
         self.assertEqual(len(objs), 0)
 
     async def test_delete_inst(self):
         inst = A(text='test_delete_inst', n=0)
         await inst.save()
         await inst.delete()
-        res = await A.exists(A.c.text == 'test_delete_inst')
-        self.assertFalse(res)
+        res = await A.select(A.c.text == 'test_delete_inst').first()
+        self.assertIsNone(res)
 
     async def test_o2m(self):
         b_inst = B(text2='test_o2m', n=0)
@@ -438,6 +491,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         await inst.save()
         inst.pydantic = PydanticTest(a=[PydanticTest2(a='123')])
         await inst.save()
+        inst = await A.get(inst.pkey)
 
     async def test_inheritance(self):
         from sqlalchemy import Integer, JSON

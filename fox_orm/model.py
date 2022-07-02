@@ -1,24 +1,23 @@
 from types import FunctionType, MethodType
 from typing import TypeVar, Any, Type
 
-from sqlalchemy import Column, Table
-from sqlalchemy.sql import Delete, Select, ClauseElement
-
 from fox_orm import FoxOrm
 from fox_orm.connection import Connection
 from fox_orm.exceptions import (
     NoPrimaryKeyError,
     AbstractModelRelationError,
     UnannotatedFieldError,
-    PrivateFieldError,
+    PrivateColumnError,
     AbstractModelInstantiationError,
     InvalidColumnError,
-    UnboundInstanceError,
+    UnboundInstanceError, NoSuchColumnError,
 )
 from fox_orm.internal.table import construct_column
 from fox_orm.internal.utils import camel_to_snake
 from fox_orm.query import Query, QueryType
 from fox_orm.relations import Relation
+from sqlalchemy import Column, Table
+from sqlalchemy.sql import Delete, Select, ClauseElement
 
 
 def is_method(obj):
@@ -41,18 +40,20 @@ def split_namespace(class_name, orig_namespace):
             if k in ('__qualname__', '__module__'):
                 namespace[k] = v
                 continue
-            raise PrivateFieldError(k)
+            raise PrivateColumnError(k)
         if k.startswith(f'_{class_name}__'):
-            raise PrivateFieldError(k)
+            raise PrivateColumnError(k)
 
         if isinstance(v, Relation):
             relations[k] = v
         elif not is_method(v):
+            if k.startswith('_'):
+                raise PrivateColumnError(k)
             field_names.add(k)
 
     annotations = {k: v for k, v in annotations.items() if k not in relations}
-    if invalid_annotations := [x for x in annotations.keys() if x.startswith('__')]:
-        raise PrivateFieldError(invalid_annotations[0])
+    if invalid_annotations := [x for x in annotations.keys() if x.startswith('_')]:
+        raise PrivateColumnError(invalid_annotations[0])
     for column_name in field_names:
         if column_name not in annotations:
             raise UnannotatedFieldError(column_name)
@@ -76,13 +77,13 @@ def generate_columns(bases, annotations, orig_namespace):
 
 class OrmModelMeta(type):
     def __new__(
-        mcs,
-        class_name,
-        bases,
-        orig_namespace,
-        table_name: str | None = None,
-        abstract: bool = False,
-        connection: Connection | str = 'default',
+            mcs,
+            class_name,
+            bases,
+            orig_namespace,
+            table_name: str | None = None,
+            abstract: bool = False,
+            connection: Connection | str = 'default',
     ):
         if not bases:
             return super().__new__(mcs, class_name, bases, orig_namespace)
@@ -168,6 +169,19 @@ class OrmModel(metaclass=OrmModelMeta):
             return self.__relation_values.get(item, None)
         raise AttributeError
 
+    def __setattr__(self, key, value):
+        if key.startswith('_'):
+            return super().__setattr__(key, value)
+
+        if key in self.__columns__:
+            self.__column_values[key] = value
+            self.__modified.add(key)
+        else:
+            raise NoSuchColumnError(key)
+
+    def flag_modified(self, *args):
+        self.__modified.update(args)
+
     @property
     def __pkey_condition(self):
         self.__ensure_bound()
@@ -236,7 +250,7 @@ class OrmModel(metaclass=OrmModelMeta):
                 raise ValueError('Number of values passed to .get must match the number of primary keys')
             query = cls.select()
             for col, val in zip(cls.__pkeys__, args):
-                query.where(col == val)
+                query = query.where(col == val)
         return await query.first()
 
     @classmethod
@@ -247,6 +261,27 @@ class OrmModel(metaclass=OrmModelMeta):
         if instance is None:
             instance = await cls(**kwargs).save()
         return instance
+
+    @classmethod
+    async def delete_where(cls, *args, **kwargs):
+        db = cls.__connection__.db
+        table = cls.__table__
+        query = table.delete()
+        for arg in args:
+            query = query.where(arg)
+        for k, v in kwargs.items():
+            query = query.where(table.c[k] == v)
+        return await db.fetch_val(query)
+
+    async def delete(self):
+        self.__ensure_bound()
+        db = self.__connection__.db
+        table = self.__table__
+        res = await db.fetch_val(
+            table.delete().where(self.__pkey_condition)
+        )
+        self.__bound = False
+        return res
 
 
 __all__ = ['OrmModel']

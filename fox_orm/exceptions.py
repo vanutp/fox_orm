@@ -11,10 +11,10 @@ class UnannotatedFieldError(ModelCreationError):
         super().__init__(f'Unannotated field {field_name!r}')
 
 
-class PrivateFieldError(ModelCreationError):
+class PrivateColumnError(ModelCreationError):
     def __init__(self, field_name: str):
         super().__init__(
-            f'Fields starting with __ are not allowed (got {field_name!r})'
+            f'Column names cannot start with _ (got {field_name!r})'
         )
 
 
@@ -77,11 +77,16 @@ class InvalidQueryTypeError(TypeError):
         super().__init__(text)
 
 
+class NoSuchColumnError(AttributeError):
+    def __init__(self, column_name: str):
+        super().__init__(f'No such column: {column_name!r}')
+
+
 __all__ = [
     'OrmError',
     'ModelCreationError',
     'UnannotatedFieldError',
-    'PrivateFieldError',
+    'PrivateColumnError',
     'NoPrimaryKeyError',
     'AbstractModelRelationError',
     'UnsupportedTypeError',
@@ -91,4 +96,5 @@ __all__ = [
     'UnboundInstanceError',
     'QueryBuiltError',
     'InvalidQueryTypeError',
+    'NoSuchColumnError',
 ]

@@ -4,10 +4,6 @@ version = "0.3.6"
 description = "Simple databases based ORM with pythonic syntax"
 authors = ["vanutp <hello@vanutp.dev>"]
 license = "MIT"
-packages = [
-    { include = "fox_orm" },
-    { include = "fox_orm-stubs", from = "stubs" }
-]
 
 [tool.black]
 skip-string-normalization = true
