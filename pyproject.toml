@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fox-orm"
-version = "0.3.6"
+version = "0.3.6.1"
 description = "Simple databases based ORM with pythonic syntax"
 authors = ["vanutp <hello@vanutp.dev>"]
 license = "MIT"
