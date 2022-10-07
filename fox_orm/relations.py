@@ -27,7 +27,9 @@ RELATION = TypeVar('RELATION', bound='_GenericIterableRelation')
 class HashList(List[MODEL]):
     map: dict
 
-    def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
+    def __init__(
+        self, items: Optional[List[MODEL]] = None
+    ):  # pylint: disable=unsubscriptable-object
         self.map = {}
         if items is not None:
             super().__init__(items)
@@ -48,7 +50,9 @@ class HashList(List[MODEL]):
         del self[self.map[other.pkey_value]]
         del self.map[other.pkey_value]
 
-    def __contains__(self, item: Optional[Union[MODEL, int]]):  # pylint: disable=unsubscriptable-object
+    def __contains__(
+        self, item: Optional[Union[MODEL, int]]
+    ):  # pylint: disable=unsubscriptable-object
         if item is None:
             return False
         if isinstance(item, int):
@@ -116,7 +120,9 @@ class _GenericIterableRelation(ABC):
     async def fetch(self) -> None:
         self._check_model_state()
         ids = await self.fetch_ids()
-        self._objects = HashList(await asyncio.gather(*[self.objects_type.get(x) for x in ids]))
+        self._objects = HashList(
+            await asyncio.gather(*[self.objects_type.get(x) for x in ids])
+        )
         self._fetched = True
 
     def _raise_if_not_initialized(self):
@@ -188,7 +194,9 @@ class _GenericIterableRelation(ABC):
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+            raise OrmException(
+                'given relation\'s objects type is incompatible with this relation\'s type'
+            )
         return self._objects & other._objects
 
     def __or__(self, other: '_GenericIterableRelation') -> List[MODEL]:
@@ -196,7 +204,9 @@ class _GenericIterableRelation(ABC):
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+            raise OrmException(
+                'given relation\'s objects type is incompatible with this relation\'s type'
+            )
         return self._objects | other._objects
 
 
