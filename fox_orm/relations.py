@@ -139,6 +139,24 @@ class _GenericIterableRelation(List[MODEL], ABC):
             return item in self._map
         return item.pkey_value in self._map
 
+    def __iter__(self) -> Iterator[MODEL]:
+        self._raise_if_not_fetched()
+        return super().__iter__()
+
+    def __getitem__(self, item) -> MODEL:
+        self._raise_if_not_fetched()
+        return super().__getitem__(item)
+
+    def __len__(self) -> int:
+        self._raise_if_not_fetched()
+        return super().__len__()
+
+    def __bool__(self) -> int:
+        if not self._initialized:
+            return True
+        self._raise_if_not_fetched()
+        return super().__len__() > 0
+
     def __and__(self, other: '_GenericIterableRelation') -> List[MODEL]:
         self._raise_if_not_fetched()
         if not isinstance(other, _GenericIterableRelation):
