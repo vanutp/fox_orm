@@ -24,7 +24,55 @@ MODEL = TypeVar('MODEL', bound='OrmModel')
 RELATION = TypeVar('RELATION', bound='_GenericIterableRelation')
 
 
-class _GenericIterableRelation(List[MODEL], ABC):
+class HashList(List[MODEL]):
+    map: dict
+
+    def __init__(self, items: Optional[List[MODEL]] = None):  # pylint: disable=unsubscriptable-object
+        self.map = {}
+        if items is not None:
+            super().__init__(items)
+            for i, x in enumerate(items):
+                self.map[x.pkey_value] = i
+        else:
+            super().__init__()
+
+    def add(self, other: MODEL):
+        if other.pkey_value in self.map:
+            return
+        self.append(other)
+        self.map[other.pkey_value] = len(self) - 1
+
+    def delete(self, other: MODEL):
+        if other.pkey_value not in self.map:
+            return
+        del self[self.map[other.pkey_value]]
+        del self.map[other.pkey_value]
+
+    def __contains__(self, item: Optional[Union[MODEL, int]]):  # pylint: disable=unsubscriptable-object
+        if item is None:
+            return False
+        if isinstance(item, int):
+            return item in self.map
+        return item.pkey_value in self.map
+
+    def __and__(self, other: 'HashList'):
+        result = []
+        for x in other:
+            if x.pkey_value in self.map:
+                result.append(x)
+        return result
+
+    def __or__(self, other: 'HashList'):
+        result = []
+        for x in other:
+            result.append(x)
+        for x in self:
+            if x.pkey_value not in other.map:
+                result.append(x)
+        return result
+
+
+class _GenericIterableRelation(ABC):
     # FoxOrm.init_relations() called, _from set, _to resolved to class
     _initialized: bool
     _from: 'Type[OrmModel]'
@@ -34,13 +82,12 @@ class _GenericIterableRelation(List[MODEL], ABC):
     _model: 'OrmModel'
     # Relation objects fetched
     _fetched: bool
-    _map: dict
+    _objects: HashList
 
     __modified__: dict
 
     def __init__(self):
-        super().__init__()
-        self._map = {}
+        self._objects = HashList()
         self.__modified__ = {}
         self._fetched = False
         self._initialized = False
@@ -69,14 +116,7 @@ class _GenericIterableRelation(List[MODEL], ABC):
     async def fetch(self) -> None:
         self._check_model_state()
         ids = await self.fetch_ids()
-
-        objects = await asyncio.gather(*[self.objects_type.get(x) for x in ids])
-        self._map = {}
-        self.clear()
-        self.extend(objects)
-        for i, x in enumerate(objects):
-            self._map[x.pkey_value] = i
-
+        self._objects = HashList(await asyncio.gather(*[self.objects_type.get(x) for x in ids]))
         self._fetched = True
 
     def _raise_if_not_initialized(self):
@@ -106,12 +146,7 @@ class _GenericIterableRelation(List[MODEL], ABC):
         other.ensure_id()
         if not isinstance(other, self.objects_type):
             raise OrmException('other is not instance of target model')
-
-        if other.pkey_value in self._map:
-            return
-        self.append(other)
-        self._map[other.pkey_value] = super().__len__() - 1
-
+        self._objects.add(other)
         self.__modified__[other.pkey_value] = True
         return OptionalAwaitable(self.save)
 
@@ -120,12 +155,7 @@ class _GenericIterableRelation(List[MODEL], ABC):
         other.ensure_id()
         if not isinstance(other, self.objects_type):
             raise OrmException('other is not instance of target model')
-
-        if other.pkey_value not in self._map:
-            return
-        del self[self._map[other.pkey_value]]
-        del self._map[other.pkey_value]
-
+        self._objects.delete(other)
         self.__modified__[other.pkey_value] = False
         return OptionalAwaitable(self.save)
 
@@ -133,64 +163,44 @@ class _GenericIterableRelation(List[MODEL], ABC):
         self, item: Union[MODEL, int]
     ) -> bool:  # pylint: disable=unsubscriptable-object
         self._raise_if_not_fetched()
-        if item is None:
-            return False
-        if isinstance(item, int):
-            return item in self._map
-        return item.pkey_value in self._map
+        return item in self._objects
 
     def __iter__(self) -> Iterator[MODEL]:
         self._raise_if_not_fetched()
-        return super().__iter__()
+        return self._objects.__iter__()
 
     def __getitem__(self, item) -> MODEL:
         self._raise_if_not_fetched()
-        return super().__getitem__(item)
+        return self._objects[item]
 
     def __len__(self) -> int:
         self._raise_if_not_fetched()
-        return super().__len__()
+        return len(self._objects)
 
     def __bool__(self) -> int:
         if not self._initialized:
             return True
         self._raise_if_not_fetched()
-        return super().__len__() > 0
+        return bool(self._objects)
 
     def __and__(self, other: '_GenericIterableRelation') -> List[MODEL]:
         self._raise_if_not_fetched()
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException(
-                'given relation\'s objects type is incompatible with this relation\'s type'
-            )
-
-        result = []
-        for x in other:
-            if x.pkey_value in self._map:
-                result.append(x)
-        return result
+            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+        return self._objects & other._objects
 
     def __or__(self, other: '_GenericIterableRelation') -> List[MODEL]:
         self._raise_if_not_fetched()
         if not isinstance(other, _GenericIterableRelation):
             raise OrmException('given parameter is not relation')
         if other.objects_type != self.objects_type:
-            raise OrmException(
-                'given relation\'s objects type is incompatible with this relation\'s type'
-            )
-
-        result = []
-        for x in other:
-            result.append(x)
-        for x in self:
-            if x.pkey_value not in other._map:
-                result.append(x)
-        return result
+            raise OrmException('given relation\'s objects type is incompatible with this relation\'s type')
+        return self._objects | other._objects
 
 
-class ManyToMany(_GenericIterableRelation):
+class ManyToMany(Generic[MODEL], _GenericIterableRelation):
     _via: Table
     _via_name: str
     _this_id: str
@@ -286,7 +296,7 @@ class ManyToMany(_GenericIterableRelation):
         self.__modified__ = {}
 
 
-class OneToMany(_GenericIterableRelation):
+class OneToMany(Generic[MODEL], _GenericIterableRelation):
     key: str
 
     async def _get_entry(self, other_id):
