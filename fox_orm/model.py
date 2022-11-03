@@ -123,7 +123,10 @@ class OrmModelMeta(type):
                 connection = FoxOrm.connections[connection]
             namespace['__connection__'] = connection
             namespace['__table__'] = Table(
-                table_name, connection.metadata, *columns.values(), *table_args,
+                table_name,
+                connection.metadata,
+                *columns.values(),
+                *table_args,
             )
 
         cls = super().__new__(mcs, class_name, bases, namespace)

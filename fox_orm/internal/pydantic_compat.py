@@ -9,4 +9,5 @@ except ImportError:
         def json(self, *args, **kwargs):
             ...
 
+
 __all__ = ['BaseModel']
