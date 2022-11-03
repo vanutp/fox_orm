@@ -13,7 +13,7 @@ class Relation(ABC, Generic[MODEL]):
         ...
 
 
-class OneToOne(Relation, Generic[MODEL]):
+class ObjectLink(Relation, Generic[MODEL]):
     ...
 
 
@@ -35,7 +35,7 @@ class ManyToMany(IterableRelation, Generic[MODEL]):
 
 __all__ = [
     'Relation',
-    'OneToOne',
+    'ObjectLink',
     'OneToMany',
     'IterableRelation',
     'ManyToOne',

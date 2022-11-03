@@ -36,10 +36,14 @@ def split_namespace(class_name, orig_namespace):
     namespace = {}
     relations = {}
     field_names = set()
+    table_args = []
     for k, v in orig_namespace.items():
         if k.startswith('__'):
             if k in ('__qualname__', '__module__'):
                 namespace[k] = v
+                continue
+            if k == '__table_args__':
+                table_args = v
                 continue
             raise PrivateColumnError(k)
         if k.startswith(f'_{class_name}__'):
@@ -58,7 +62,7 @@ def split_namespace(class_name, orig_namespace):
     for column_name in field_names:
         if column_name not in annotations:
             raise UnannotatedFieldError(column_name)
-    return annotations, namespace, relations, field_names
+    return annotations, namespace, relations, field_names, table_args
 
 
 def generate_columns(bases, annotations, orig_namespace):
@@ -89,9 +93,13 @@ class OrmModelMeta(type):
         if not bases:
             return super().__new__(mcs, class_name, bases, orig_namespace)
 
-        annotations, namespace, relations, field_names = split_namespace(
-            class_name, orig_namespace
-        )
+        (
+            annotations,
+            namespace,
+            relations,
+            field_names,
+            table_args,
+        ) = split_namespace(class_name, orig_namespace)
         columns = generate_columns(bases, annotations, orig_namespace)
         pkeys = [v for k, v in columns.items() if v.primary_key]
         if not pkeys:
@@ -115,7 +123,7 @@ class OrmModelMeta(type):
                 connection = FoxOrm.connections[connection]
             namespace['__connection__'] = connection
             namespace['__table__'] = Table(
-                table_name, connection.metadata, *columns.values()
+                table_name, connection.metadata, *columns.values(), *table_args,
             )
 
         cls = super().__new__(mcs, class_name, bases, namespace)
@@ -168,7 +176,7 @@ class OrmModel(metaclass=OrmModelMeta):
             return self.__column_values.get(item, None)
         if item in self.__relations__:
             return self.__relation_values.get(item, None)
-        raise AttributeError
+        raise AttributeError(f'{type(self).__name__} object has no attribute {item}')
 
     def __setattr__(self, key, value):
         if key.startswith('_'):

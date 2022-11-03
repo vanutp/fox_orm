@@ -19,8 +19,13 @@ def lenient_issubclass(
     return isinstance(cls, type) and issubclass(cls, class_or_tuple)
 
 
-def is_sqla_type(type_: Type[Any]) -> bool:
-    return lenient_issubclass(type_, TypeEngine) or isinstance(type_, TypeEngine)
+def to_sqla_type_instance(type_: Type[Any]) -> TypeEngine | None:
+    if lenient_issubclass(type_, TypeEngine):
+        return type_()
+    elif isinstance(type_, TypeEngine):
+        return type_
+    else:
+        return None
 
 
 class _UnsupportedType:
@@ -36,8 +41,7 @@ def parse_type(type_: Type[Any]) -> tuple[Type[Any] | _UnsupportedType, bool]:
     if origin is None:
         return type_, True
     if (
-        origin is types.UnionType
-        or origin is typing.Union
+        (origin is types.UnionType or origin is typing.Union)
         and len((args := typing.get_args(type_))) == 2
         and (none_idx := try_index(args, type(None))) is not None
     ):
@@ -71,10 +75,9 @@ def camel_to_snake(name):
 __all__ = [
     'try_index',
     'lenient_issubclass',
-    'is_sqla_type',
+    'to_sqla_type_instance',
     'UNSUPPORTED_TYPE',
     'parse_type',
     'OptionalAwaitable',
-    'class_or_instancemethod',
     'camel_to_snake',
 ]

@@ -88,6 +88,7 @@ __all__ = [
     'NoPrimaryKeyError',
     'AbstractModelRelationError',
     'UnsupportedTypeError',
+    'NoTypeError',
     'MultipleTypesError',
     'AbstractModelInstantiationError',
     'InvalidColumnError',
